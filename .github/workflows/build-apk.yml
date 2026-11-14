@@ -1,34 +1,39 @@
-name: Build RuFilmTV 2.8
+name: Build RuFilmTV 2.9 APK
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - 'RuFilmTV-2.9-project.zip'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Extract RuFilmTV 2.8
-        run: unzip -o RuFilmTV-2.8-project.zip -d .
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
+      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
+      - name: Extract RuFilmTV 2.9 project
+        run: unzip -o RuFilmTV-2.9-project.zip -d .
       - name: Build debug APK
-        working-directory: rufilm-tv-2.8
-        run: gradle assembleDebug
-
+        working-directory: rufilm-tv-2.9
+        run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: RuFilmTV-2.8-APK
-          path: rufilm-tv-2.8/app/build/outputs/apk/debug/app-debug.apk
+          name: RuFilmTV-2.9-APK
+          path: rufilm-tv-2.9/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
