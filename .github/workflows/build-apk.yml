@@ -1,11 +1,11 @@
-name: Build RuFilmTV 2.9 APK
+name: Build RuFilmTV 2.9.1 APK
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'RuFilmTV-2.9-project.zip'
+      - 'RuFilmTV-2.9.1-project.zip'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -30,13 +30,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Extract RuFilmTV 2.9 project
-        run: unzip -o RuFilmTV-2.9-project.zip -d .
+      - name: Extract RuFilmTV 2.9.1 project
+        run: unzip -o RuFilmTV-2.9.1-project.zip -d .
       - name: Build debug APK
         working-directory: rufilm-tv-2.9
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: RuFilmTV-2.9-APK
+          name: RuFilmTV-2.9.1-APK
           path: rufilm-tv-2.9/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
