@@ -6,8 +6,8 @@ android {
         applicationId = "tv.rufilm.app"
         minSdk = 23
         targetSdk = 28
-        versionCode = 16
-        versionName = "3.0.0"
+        versionCode = 17
+        versionName = "3.0.1"
     }
 }
 
