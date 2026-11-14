@@ -43,6 +43,7 @@ jobs:
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
+          python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
       - name: Build debug APK
         working-directory: rufilm-tv-2.9
         run: gradle --no-daemon assembleDebug
