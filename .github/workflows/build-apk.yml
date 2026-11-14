@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'RuFilmTV-2.9-project.zip'
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
