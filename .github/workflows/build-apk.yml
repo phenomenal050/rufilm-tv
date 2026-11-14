@@ -19,6 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -36,9 +37,9 @@ jobs:
       - name: Inspect extracted Android sources
         run: |
           echo '--- JAVA/KOTLIN SOURCE FILES ---'
-          find rufilm-tv-2.9/app/src/main -type f \( -name '*.java' -o -name '*.kt' \) -print
+          find rufilm-tv-2.9/app/src/main -type f \\( -name '*.java' -o -name '*.kt' \\) -print
           echo '--- MAIN ACTIVITY ---'
-          find rufilm-tv-2.9/app/src/main -type f -name 'MainActivity.java' -exec sed -n '1,320p' {} \;
+          find rufilm-tv-2.9/app/src/main -type f -name 'MainActivity.java' -exec sed -n '1,320p' {} \\;
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
