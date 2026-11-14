@@ -16,7 +16,7 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private String capturedMediaReferer = null;
     private String capturedMediaUserAgent = null;
     private long capturedMediaAt = 0L;
-    private boolean nativePlayerLaunching = false;''', "media fields")
+    private long lastNativePlayerLaunchAt = 0L;''', "media fields")
 
 anchor = "    // ABP-style network filtering; the cinema origin and ordinary media requests are exempt."
 capture = '''    // WebView calls shouldInterceptRequest off the UI thread. Capture only media manifests;
@@ -49,13 +49,13 @@ capture = '''    // WebView calls shouldInterceptRequest off the UI thread. Capt
     private boolean launchCapturedMedia() {
         final String url, referer, userAgent;
         synchronized (mediaCaptureLock) {
-            if (!"native".equals(playerMode) || nativePlayerLaunching ||
+            if (!"native".equals(playerMode) || System.currentTimeMillis() - lastNativePlayerLaunchAt < 10000L ||
                     capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L)
                 return false;
             url = capturedMediaUrl;
             referer = capturedMediaReferer;
             userAgent = capturedMediaUserAgent;
-            nativePlayerLaunching = true;
+            lastNativePlayerLaunchAt = System.currentTimeMillis();
         }
         runOnUiThread(() -> {
             try {
@@ -65,7 +65,6 @@ capture = '''    // WebView calls shouldInterceptRequest off the UI thread. Capt
                 intent.putExtra(NativePlayerActivity.EXTRA_USER_AGENT, userAgent);
                 startActivity(intent);
             } catch (Exception e) {
-                nativePlayerLaunching = false;
                 android.util.Log.e("RuFilmTV", "Cannot launch native player", e);
                 Toast.makeText(MainActivity.this, "Не удалось открыть встроенный плеер", Toast.LENGTH_LONG).show();
             }
@@ -88,14 +87,6 @@ once('''          + "var ok=window.RuFilmPlayer&&window.RuFilmPlayer.openNative(
 
 once('''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }''', '''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }''', "bridge method")
-
-# Reset launch guard when returning from NativePlayerActivity.
-once('''    @Override protected void onCreate(Bundle state) {''', '''    @Override protected void onResume() {
-        super.onResume();
-        nativePlayerLaunching = false;
-    }
-
-    @Override protected void onCreate(Bundle state) {''', "onResume")
 
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
