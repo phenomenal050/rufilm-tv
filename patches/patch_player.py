@@ -42,6 +42,8 @@ capture = '''    // WebView calls shouldInterceptRequest off the UI thread. Capt
             capturedMediaAt = System.currentTimeMillis();
         }
         android.util.Log.i("RuFilmTV", "Captured media manifest: " + Uri.parse(url).getHost());
+        // HLS/DASH requests are issued when playback starts, including from cross-origin iframes.
+        launchCapturedMedia();
     }
 
     private boolean launchCapturedMedia() {
