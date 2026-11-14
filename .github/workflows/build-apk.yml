@@ -1,5 +1,4 @@
-
-name: Build Rufilm TV 2.6
+name: Build RuFilmTV 2.8
 
 on:
   workflow_dispatch:
@@ -13,8 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract Rufilm TV 2.6
-        run: unzip -o rufilm-tv-2.6-with-icon.zip -d .
+      - name: Extract RuFilmTV 2.8
+        run: unzip -o RuFilmTV-2.8-project.zip -d .
 
       - uses: actions/setup-java@v4
         with:
@@ -25,11 +24,11 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build APK
-        working-directory: rufilm-tv-2.6
+      - name: Build debug APK
+        working-directory: rufilm-tv-2.8
         run: gradle assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Rufilm-TV-2.6-APK
-          path: rufilm-tv-2.6/app/build/outputs/apk/debug/app-debug.apk
+          name: RuFilmTV-2.8-APK
+          path: rufilm-tv-2.8/app/build/outputs/apk/debug/app-debug.apk
