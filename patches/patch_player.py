@@ -133,7 +133,7 @@ once('''        launchCapturedMedia();
 # Route the site's HTML5 fullscreen request to the native Media3 player.
 if "onShowCustomView(" not in s:
     import re
-    pattern = r'(new\\s+(?:android\\.webkit\\.)?WebChromeClient\\s*\\(\\s*\\)\\s*\\{)'
+    pattern = r'(new\s+(?:android\.webkit\.)?WebChromeClient\s*\(\s*\)\s*\{)'
     replacement = r'''\1
             @Override
             public void onShowCustomView(android.view.View view,
