@@ -65,7 +65,6 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
-                    now - lastNativePlayerLaunchAt < 10000L ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
             url = capturedMediaUrl;
             referer = capturedMediaReferer;
