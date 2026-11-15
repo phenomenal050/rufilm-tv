@@ -53,6 +53,7 @@ public class NativePlayerActivity extends Activity {
     private Button seasonButton;
     private Button episodeButton;
     private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
+    private String currentMediaUrl;
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 1200L); } } };
 
@@ -81,6 +82,7 @@ public class NativePlayerActivity extends Activity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
         String rawUrl = getIntent().getStringExtra(EXTRA_URL);
+        currentMediaUrl = rawUrl;
         String referer = getIntent().getStringExtra(EXTRA_REFERER);
         String userAgent = getIntent().getStringExtra(EXTRA_USER_AGENT);
         if (rawUrl == null || !(rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
@@ -262,10 +264,27 @@ public class NativePlayerActivity extends Activity {
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
                         updateEpisodeButtonLabels();
+                        syncEpisodeStreamAfterSelection();
                     } catch (Exception ignored) { }
                     dialog.dismiss();
                 }).setNegativeButton("Закрыть", null).show();
         } catch (Exception e) { Toast.makeText(this, "Не удалось открыть список", Toast.LENGTH_SHORT).show(); }
+    }
+    private void syncEpisodeStreamAfterSelection() {
+        syncHandler.postDelayed(() -> {
+            if (player == null) return;
+            String updated = MainActivity.getCapturedMediaUrl();
+            if (updated != null && !updated.equals(currentMediaUrl)) {
+                currentMediaUrl = updated;
+                MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(updated));
+                String lower = updated.toLowerCase(Locale.ROOT);
+                if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+                player.setMediaItem(item.build());
+                player.prepare();
+                player.play();
+            }
+        }, 2200L);
     }
     private boolean hasVideoTracks() {
         if (trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) return false;
