@@ -290,7 +290,7 @@ if 'rufilmActiveInstance = this;' not in s:
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
 
 # Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
-web_ctor = re.search(r'(\\bweb\\s*=\\s*new\\s+WebView\\s*\\([^;]*\\);)', s)
+web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
