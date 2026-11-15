@@ -57,6 +57,7 @@ public class NativePlayerActivity extends Activity {
     private String currentReferer;
     private String currentUserAgent;
     private HashMap<String, String> currentHeaders = new HashMap<>();
+    private long captureBaselineForSelection = 0L;
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 1200L); } } };
 
@@ -283,6 +284,7 @@ public class NativePlayerActivity extends Activity {
                 .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
                     try {
                         String value = options.getJSONObject(choice).optString("value", "");
+                        captureBaselineForSelection = MainActivity.getCapturedMediaAt();
                         MainActivity.applyEpisodeSelection(frameIndex, selectIndex, value);
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
@@ -294,28 +296,35 @@ public class NativePlayerActivity extends Activity {
         } catch (Exception e) { Toast.makeText(this, "Не удалось открыть список", Toast.LENGTH_SHORT).show(); }
     }
     private void syncEpisodeStreamAfterSelection() {
-        syncHandler.postDelayed(() -> {
-            if (player == null) return;
-            try {
-                org.json.JSONObject snapshot = new org.json.JSONObject(MainActivity.getCapturedMediaSnapshot());
-                String updated = snapshot.optString("url", "");
-                if (updated.isEmpty() || updated.equals(currentMediaUrl)) return;
-                HashMap<String, String> headers = new HashMap<>();
-                org.json.JSONObject jsonHeaders = snapshot.optJSONObject("headers");
-                if (jsonHeaders != null) {
-                    java.util.Iterator<String> keys = jsonHeaders.keys();
-                    while (keys.hasNext()) {
-                        String key = keys.next();
-                        headers.put(key, jsonHeaders.optString(key, ""));
-                    }
-                }
-                String referer = snapshot.optString("referer", currentReferer == null ? "" : currentReferer);
-                String ua = snapshot.optString("userAgent", currentUserAgent == null ? "" : currentUserAgent);
-                switchCapturedStream(updated, referer, ua, headers);
-            } catch (Exception e) {
-                android.util.Log.w("RuFilmTV", "Could not refresh stream after episode selection", e);
+        syncHandler.postDelayed(() -> trySyncEpisodeStream(0), 700L);
+    }
+
+    private void trySyncEpisodeStream(int attempt) {
+        if (player == null) return;
+        try {
+            org.json.JSONObject snapshot = new org.json.JSONObject(MainActivity.getCapturedMediaSnapshot());
+            long capturedAt = snapshot.optLong("capturedAt", 0L);
+            String updated = snapshot.optString("url", "");
+            if (capturedAt <= captureBaselineForSelection || updated.isEmpty()) {
+                if (attempt < 14) syncHandler.postDelayed(() -> trySyncEpisodeStream(attempt + 1), 500L);
+                return;
             }
-        }, 2600L);
+            if (updated.equals(currentMediaUrl)) return;
+            HashMap<String, String> headers = new HashMap<>();
+            org.json.JSONObject jsonHeaders = snapshot.optJSONObject("headers");
+            if (jsonHeaders != null) {
+                java.util.Iterator<String> keys = jsonHeaders.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    headers.put(key, jsonHeaders.optString(key, ""));
+                }
+            }
+            String referer = snapshot.optString("referer", currentReferer == null ? "" : currentReferer);
+            String ua = snapshot.optString("userAgent", currentUserAgent == null ? "" : currentUserAgent);
+            switchCapturedStream(updated, referer, ua, headers);
+        } catch (Exception e) {
+            android.util.Log.w("RuFilmTV", "Could not refresh stream after episode selection", e);
+        }
     }
 
     private void switchCapturedStream(String url, String referer, String userAgent, HashMap<String, String> headers) {
