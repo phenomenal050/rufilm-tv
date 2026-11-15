@@ -513,23 +513,24 @@ fullscreen_methods = r"""
             }).setNegativeButton("Отмена", null).show();
     }
 """
-if (!s.includes("private void addFullscreenControls()")) {
-    const anchor = "    private void hideCustomView(){";
-    if (!s.includes(anchor)) throw new Error("fullscreen methods anchor missing");
-    s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1);
-}
+if "private void addFullscreenControls()" not in s:
+    anchor = "    private void hideCustomView(){"
+    if anchor not in s:
+        raise SystemExit("fullscreen methods anchor missing")
+    s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
 
-const viewAnchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));";
-if (s.includes(viewAnchor) && !s.includes("addFullscreenControls();"))
-    s = s.replace(viewAnchor, viewAnchor + "\n                addFullscreenControls();", 1);
+view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
+if view_anchor in s and "addFullscreenControls();" not in s:
+    s = s.replace(view_anchor, view_anchor + "\n                addFullscreenControls();", 1)
 
-const hideAnchor = "if(customView==null)return;";
-if (s.includes(hideAnchor) && !s.includes("fullscreenUiHandler.removeCallbacks(hideFullscreenUi);"))
-    s = s.replace(hideAnchor, hideAnchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1);
+hide_anchor = "if(customView==null)return;"
+if hide_anchor in s and "fullscreenUiHandler.removeCallbacks(hideFullscreenUi);" not in s:
+    s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1)
 
-const keyAnchor = "    @Override public boolean dispatchKeyEvent(KeyEvent event) {";
-if (s.includes(keyAnchor) && !s.includes("if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();"))
-    s = s.replace(keyAnchor, keyAnchor + "\n        if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();", 1);
+key_anchor = "    @Override public boolean dispatchKeyEvent(KeyEvent event) {"
+key_inject = "if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();"
+if key_anchor in s and key_inject not in s:
+    s = s.replace(key_anchor, key_anchor + "\n        " + key_inject, 1)
 
 # Persist all edits, including the native-player bridge appended above.
 p.write_text(s, encoding="utf-8")
