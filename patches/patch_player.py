@@ -197,7 +197,7 @@ episode_support = r'''
             "['loadedmetadata','play','pause','timeupdate','durationchange','emptied'].forEach(function(e){v.addEventListener(e,place);});" +
             "window.addEventListener('resize',place);window.addEventListener('scroll',place,true);place();v.__rufilmFsPlace=place;});}" +
             "installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
-            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;mark();},350);});" +
+            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installFullscreenButton();mark();},350);});" +
             "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(script, null);
