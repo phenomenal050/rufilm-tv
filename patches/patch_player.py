@@ -23,13 +23,24 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private boolean nativePlayerLaunching = false;''', "media fields")
 
 anchor = "    // ABP-style network filtering; the cinema origin and ordinary media requests are exempt."
-capture = '''    // Capture HLS/DASH manifests and the request headers used by the WebView.
+capture = '''    // Never let the ad filter intercept actual video manifests or media segments.
+    private boolean isRuFilmMediaRequest(String url) {
+        if (url == null) return false;
+        String path = Uri.parse(url).getPath();
+        if (path == null) path = url;
+        path = path.toLowerCase(Locale.ROOT);
+        String[] extensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
+        for (String ext : extensions) if (path.endsWith(ext)) return true;
+        return false;
+    }
+
+    // Capture HLS/DASH manifests and the request headers used by the WebView.
     private void captureMediaRequest(WebResourceRequest request) {
         if (request == null || request.getUrl() == null ||
                 !"GET".equalsIgnoreCase(request.getMethod())) return;
         String url = request.getUrl().toString();
         String lower = url.toLowerCase(Locale.ROOT);
-        if (!(lower.contains(".m3u8") || lower.contains(".mpd")) || isAdRequest(url)) return;
+        if (!(lower.contains(".m3u8") || lower.contains(".mpd")) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
         saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
         Map<String, String> safeHeaders = new HashMap<>();
@@ -47,6 +58,13 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                 if ("referer".equals(k)) referer = entry.getValue();
                 if ("user-agent".equals(k)) userAgent = entry.getValue();
             }
+        }
+        try {
+            String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
+            if (cookie != null && !cookie.isEmpty()) safeHeaders.put("Cookie", cookie);
+        } catch (Exception ignored) { }
+        if ((userAgent == null || userAgent.isEmpty()) && web != null) {
+            try { userAgent = web.getSettings().getUserAgentString(); } catch (Exception ignored) { }
         }
         synchronized (mediaCaptureLock) {
             capturedMediaUrl = url;
@@ -107,6 +125,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                             try { startActivity(launchIntent); }
                             catch (Exception e) {
                                 nativePlayerLaunching = false;
+        syncOriginalPlayback(0L, false);
                                 syncOriginalPlayback(0L, false);
                                 android.util.Log.e("RuFilmTV", "Cannot launch native player", e);
                                 Toast.makeText(MainActivity.this, "Не удалось открыть встроенный плеер", Toast.LENGTH_LONG).show();
@@ -126,7 +145,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
 '''
 once(anchor, capture+anchor, "capture methods")
 
-once('''                if (request != null && isAdRequest(request.getUrl().toString()))
+once('''                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', '''                captureMediaRequest(request);
                 if (request != null && isAdRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', "request interception")
