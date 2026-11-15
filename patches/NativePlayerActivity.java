@@ -217,8 +217,31 @@ public class NativePlayerActivity extends Activity {
         } catch (Exception ignored) { }
     }
     private void showEpisodeSelector(int which) {
+        if (episodeSelectors.length() <= which || episodeSelectors.optJSONObject(which) == null ||
+                episodeSelectors.optJSONObject(which).optJSONArray("options") == null ||
+                episodeSelectors.optJSONObject(which).optJSONArray("options").length() == 0) {
+            MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
+                try {
+                    Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
+                    String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
+                    episodeSelectors = new org.json.JSONArray(json);
+                    updateEpisodeButtonLabels();
+                    showEpisodeSelectorNow(which);
+                } catch (Exception e) {
+                    Toast.makeText(this, "Сайт пока не предоставил список сезонов/серий", Toast.LENGTH_SHORT).show();
+                }
+            }));
+            return;
+        }
+        showEpisodeSelectorNow(which);
+    }
+
+    private void showEpisodeSelectorNow(int which) {
         try {
-            if (episodeSelectors.length() <= which) { Toast.makeText(this, "Список сезонов/серий не найден на странице", Toast.LENGTH_SHORT).show(); return; }
+            if (episodeSelectors.length() <= which) {
+                Toast.makeText(this, "На этой странице нет списка " + (which == 0 ? "сезонов" : "серий"), Toast.LENGTH_SHORT).show();
+                return;
+            }
             org.json.JSONObject selector = episodeSelectors.getJSONObject(which);
             org.json.JSONArray options = selector.optJSONArray("options");
             if (options == null || options.length() == 0) return;
@@ -230,7 +253,7 @@ public class NativePlayerActivity extends Activity {
                 if (option.optBoolean("selected", false)) selected = i;
             }
             final int selectIndex = selector.optInt("index", which);
-            final int frameIndex = selector.optInt("frameIndex", 0);
+            final int frameIndex = selector.optInt("frameIndex", -1);
             new AlertDialog.Builder(this).setTitle(which == 0 ? "Выбор сезона" : "Выбор серии")
                 .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
                     try {
@@ -244,7 +267,6 @@ public class NativePlayerActivity extends Activity {
                 }).setNegativeButton("Закрыть", null).show();
         } catch (Exception e) { Toast.makeText(this, "Не удалось открыть список", Toast.LENGTH_SHORT).show(); }
     }
-
     private boolean hasVideoTracks() {
         if (trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) return false;
         MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
