@@ -230,11 +230,12 @@ public class NativePlayerActivity extends Activity {
                 if (option.optBoolean("selected", false)) selected = i;
             }
             final int selectIndex = selector.optInt("index", which);
+            final int frameIndex = selector.optInt("frameIndex", 0);
             new AlertDialog.Builder(this).setTitle(which == 0 ? "Выбор сезона" : "Выбор серии")
                 .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
                     try {
                         String value = options.getJSONObject(choice).optString("value", "");
-                        MainActivity.applyEpisodeSelection(selectIndex, value);
+                        MainActivity.applyEpisodeSelection(frameIndex, selectIndex, value);
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
                         updateEpisodeButtonLabels();
