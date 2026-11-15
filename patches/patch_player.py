@@ -605,14 +605,15 @@ methods = r"""
             String a = String.format(Locale.US, "#%06X", (0xFFFFFF & accent));
             String js = "(function(){var id='rufilm-theme-colors',accent='" + a + "';" +
                 "function install(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(id);if(!st){st=d.createElement('style');st.id=id;(d.head||d.documentElement).appendChild(st);}" +
-                "st.textContent=':root{--rf-accent:'+accent+'!important;--rf-red:'+accent+'!important;--primary:'+accent+'!important;--accent:'+accent+'!important;color-scheme:dark;}' +" +
-                "a,a:visited,.link,.pagination a,.pages a,.navigation a,.pagi a,.description a,.entry-content a{color:'+accent+'!important;}' +" +
-                "a:focus,button:focus,input:focus,select:focus,textarea:focus,[tabindex]:focus{outline:3px solid '+accent+'!important;outline-offset:2px!important;}' +" +
-                "button,input[type=submit],input[type=button],.active,.current,.pagination .active,.pages .active,.selected,.is-active,[aria-current=true]{background:'+accent+'!important;border-color:'+accent+'!important;color:#fff!important;}' +" +
-                "input[type=checkbox],input[type=radio],progress{accent-color:'+accent+'!important;}' +" +
-                "::selection{background:'+accent+'!important;color:#fff!important;}' +" +
-                "article,.shortstory,.short-story,.movie-item,.film-item,.serial-item,.item,.post,.news-item,.story,.content-item,.movie,.film,.serial,.card{border-color:'+accent+'66!important;}' +" +
-                ".progress,.progress-bar,.video-js .vjs-play-progress,.plyr__progress__played{background-color:'+accent+'!important;}';}catch(e){}}" +
+                "var css=':root{--rf-accent:'+accent+'!important;--rf-red:'+accent+'!important;--primary:'+accent+'!important;--accent:'+accent+'!important;color-scheme:dark;}'" +
+                "+'a,a:visited,.link,.pagination a,.pages a,.navigation a,.pagi a,.description a,.entry-content a{color:'+accent+'!important;}'" +
+                "+'a:focus,button:focus,input:focus,select:focus,textarea:focus,[tabindex]:focus{outline:3px solid '+accent+'!important;outline-offset:2px!important;}'" +
+                "+'button,input[type=submit],input[type=button],.active,.current,.pagination .active,.pages .active,.selected,.is-active,[aria-current=true]{background:'+accent+'!important;border-color:'+accent+'!important;color:#fff!important;}'" +
+                "+'input[type=checkbox],input[type=radio],progress{accent-color:'+accent+'!important;}'" +
+                "+'::selection{background:'+accent+'!important;color:#fff!important;}'" +
+                "+'article,.shortstory,.short-story,.movie-item,.film-item,.serial-item,.item,.post,.news-item,.story,.content-item,.movie,.film,.serial,.card{border-color:'+accent+'66!important;}'" +
+                "+'.progress,.progress-bar,.video-js .vjs-play-progress,.plyr__progress__played{background-color:'+accent+'!important;}';st.textContent=css;" +
+                "}catch(e){}}" +
                 "install(document);function scan(){var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{install(fs[i].contentDocument);}catch(e){}if(!fs[i].__rufilmThemeBound){fs[i].__rufilmThemeBound=true;fs[i].addEventListener('load',function(){try{install(this.contentDocument);}catch(e){}});}}}" +
                 "scan();if(!window.__rufilmThemeObserver){window.__rufilmThemeObserver=new MutationObserver(scan);window.__rufilmThemeObserver.observe(document.documentElement,{childList:true,subtree:true});}})();";
             web.evaluateJavascript(js, null);
