@@ -118,5 +118,38 @@ once('''          + "var ok=window.RuFilmPlayer&&window.RuFilmPlayer.openNative(
 once('''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }''', '''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }''', "bridge method")
 
+
+# Do not steal playback as soon as a manifest is requested. The user must first
+# choose the season/episode in the site's own selectors and enter fullscreen.
+once('''        launchCapturedMedia();
+    }
+
+    private boolean launchCapturedMedia()''', '''        // Playback is launched from WebChromeClient.onShowCustomView only.
+        // This leaves the season and episode selectors usable before fullscreen.
+    }
+
+    private boolean launchCapturedMedia()''', "defer native launch until fullscreen")
+
+# Route the site's HTML5 fullscreen request to the native Media3 player.
+if "onShowCustomView(" not in s:
+    import re
+    pattern = r'(new\\s+(?:android\\.webkit\\.)?WebChromeClient\\s*\\(\\s*\\)\\s*\\{)'
+    replacement = r'''\1
+            @Override
+            public void onShowCustomView(android.view.View view,
+                    android.webkit.WebChromeClient.CustomViewCallback callback) {
+                if (launchCapturedMedia()) {
+                    try { callback.onCustomViewHidden(); } catch (Exception ignored) {}
+                    return;
+                }
+                super.onShowCustomView(view, callback);
+            }
+'''
+    s, count = re.subn(pattern, replacement, s, count=1)
+    if count != 1:
+        raise SystemExit("Could not locate WebChromeClient anonymous class; refusing an unsafe fullscreen patch.")
+elif "launchCapturedMedia()" not in s[s.find("onShowCustomView(")-500:s.find("onShowCustomView(")+1200]:
+    raise SystemExit("An existing onShowCustomView handler needs manual integration; refusing to overwrite it.")
+
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
