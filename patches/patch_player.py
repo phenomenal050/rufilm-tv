@@ -548,8 +548,6 @@ if key_anchor in s and key_inject not in s:
     s = s.replace(key_anchor, key_anchor + "\n        " + key_inject, 1)
 
 
-# Branding, theme selector, and fullscreen mouse pointer.
-theme_patch = r'''
 s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,36,40),\n        accent = Color.rgb(215,52,69), muted = Color.rgb(173,176,183);',
 '''private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,36,40),
         muted = Color.rgb(173,176,183);
@@ -618,7 +616,6 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
                     });
                 }
                 fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
-'''
 
 # Persist all edits, including the native-player bridge appended above.
 p.write_text(s, encoding="utf-8")
