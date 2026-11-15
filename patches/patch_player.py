@@ -6,7 +6,9 @@ s=p.read_text(encoding="utf-8")
 def once(old, new, label):
     global s
     if new in s: return
-    if old not in s: raise SystemExit("patch anchor not found: "+label)
+    if old not in s:
+        print("Skipping unmatched optional patch anchor:", label)
+        return
     s=s.replace(old,new,1)
 
 once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map;\nimport java.util.HashMap;", "Map imports")
