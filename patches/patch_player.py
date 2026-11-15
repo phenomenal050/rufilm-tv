@@ -224,6 +224,12 @@ bridge_fields = '''
         final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
         a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()", null));
     }
+    public static void refreshEpisodeSelectors(android.webkit.ValueCallback<String> callback) {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null || a.web == null) { if (callback != null) callback.onReceiveValue("[]"); return; }
+        final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}var all=[];ds.forEach(function(d,k){[].slice.call(d.querySelectorAll('select')).forEach(function(x,i){if(!x.options||x.options.length<2)return;var p=x.parentElement;var m=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?p.innerText:''].join(' ').toLowerCase();var o=[].map.call(x.options,function(v){return {text:(v.textContent||'').trim(),value:v.value,selected:v.selected};});all.push({frameIndex:ids[k],index:i,meta:m,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:o.map(function(v){return v.text;}).join(' ').toLowerCase()});});});function pick(r){for(var j=0;j<all.length;j++)if(r.test(all[j].meta+' '+all[j].words))return all[j];return null;}var a=pick(/season|сезон/),b=pick(/episode|серия|эпизод/);if(!a&&all.length)a=all[0];if(!b&&all.length>1)b=(a===all[0]?all[1]:all[0]);var z=[];if(a)z.push(a);if(b&&b!==a)z.push(b);return JSON.stringify(z);})()";
+        a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, callback); else if (callback != null) callback.onReceiveValue("[]"); });
+    }
     public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
