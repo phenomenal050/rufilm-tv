@@ -166,27 +166,7 @@ if capture_start >= 0 and capture_end > capture_start:
     capture_block = capture_block.replace("        launchCapturedMedia();", "        // Wait for the site's fullscreen request after the user selects an episode.")
     s = s[:capture_start] + capture_block + s[capture_end:]
 
-# Intercept the existing WebChromeClient fullscreen callback. The project already
-# defines onShowCustomView, so patch that method instead of adding a duplicate.
-show_pos = s.find("onShowCustomView(")
-if show_pos < 0:
-    raise SystemExit("WebChromeClient fullscreen callback not found.")
-if "launchCapturedMedia()" not in s[show_pos:show_pos + 1800]:
-    method = re.search(
-        r'(public\s+void\s+onShowCustomView\s*\(([^)]*CustomViewCallback\s+(\w+)[^)]*)\)\s*\{)',
-        s
-    )
-    if not method:
-        raise SystemExit("Could not safely identify the fullscreen callback parameter.")
-    callback_name = method.group(3)
-    injected = method.group(1) + """
-                if (launchCapturedMedia()) {
-                    try { CALLBACK.onCustomViewHidden(); } catch (Exception ignored) {}
-                    return;
-                }
-""".replace("CALLBACK", callback_name)
-    s = s[:method.start()] + injected + s[method.end():]
-
+# WebChromeClient keeps the original HTML5 video alive in its fullscreen custom view.
 
 # Make the site's existing season/episode <select> controls reachable by Android TV DPAD.
 # Keep the site's own change handlers: choosing an option still triggers the site normally.
@@ -340,6 +320,216 @@ else:
     }
 
 ''' + s[class_end:]
+
+
+# Use the same HTML5 element for fullscreen; never auto-launch a second ExoPlayer.
+hook_start = s.find("    private void injectExternalPlayerHook(WebView view) {")
+hook_end = s.find("    private class PlayerBridge", hook_start)
+if hook_start < 0 or hook_end < 0:
+    raise SystemExit("Could not locate external-player hook")
+s = s[:hook_start] + "    private void injectExternalPlayerHook(WebView view) { installEpisodeSelectorSupport(); }\n\n" + s[hook_end:]
+
+fullscreen_fields = r"""
+    private FrameLayout fullscreenControls;
+    private Button fullscreenSeasonButton, fullscreenEpisodeButton, fullscreenMuteButton;
+    private android.widget.SeekBar fullscreenVolumeSeek;
+    private org.json.JSONObject fullscreenSeasonData, fullscreenEpisodeData;
+    private final android.os.Handler fullscreenUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable hideFullscreenUi = () -> {
+        if (fullscreenControls != null) fullscreenControls.animate().alpha(0f).setDuration(220L).withEndAction(() -> {
+            if (fullscreenControls != null && fullscreenControls.getAlpha() < 0.1f) fullscreenControls.setVisibility(View.GONE);
+        }).start();
+    };
+    private int lastNonZeroMusicVolume = 5;
+"""
+if "private FrameLayout fullscreenControls;" not in s:
+    anchor = "    private final Object mediaCaptureLock = new Object();"
+    if anchor not in s: raise SystemExit("fullscreen fields anchor missing")
+    s = s.replace(anchor, fullscreen_fields + "\n" + anchor, 1)
+
+fullscreen_methods = r"""
+    private void showFullscreenUi() {
+        if (fullscreenControls == null) return;
+        fullscreenControls.setVisibility(View.VISIBLE);
+        fullscreenControls.animate().alpha(1f).setDuration(140L).start();
+        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);
+        fullscreenUiHandler.postDelayed(hideFullscreenUi, 4500L);
+    }
+
+    private void addFullscreenControls() {
+        if (fullscreenContainer == null || fullscreenControls != null) return;
+        fullscreenControls = new FrameLayout(this);
+        fullscreenControls.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) showFullscreenUi();
+            return false;
+        });
+        fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
+
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(12), dp(6), dp(12), dp(6));
+        bar.setBackground(shape(0xdd111316, 12));
+        FrameLayout.LayoutParams barParams = new FrameLayout.LayoutParams(-1, dp(62), Gravity.TOP);
+        barParams.setMargins(dp(18), dp(16), dp(18), 0);
+        fullscreenControls.addView(bar, barParams);
+
+        Button exit = button("Назад", false);
+        exit.setOnClickListener(v -> hideCustomView());
+        bar.addView(exit, new LinearLayout.LayoutParams(dp(82), dp(46)));
+
+        TextView brand = text("RU FILM TV", 15, Color.WHITE, true);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        brandParams.leftMargin = dp(12);
+        bar.addView(brand, brandParams);
+
+        fullscreenSeasonButton = button("Сезон ▾", false);
+        fullscreenSeasonButton.setTextSize(11);
+        fullscreenSeasonButton.setOnClickListener(v -> { showFullscreenUi(); showFullscreenSelector(true); });
+        bar.addView(fullscreenSeasonButton, new LinearLayout.LayoutParams(dp(126), dp(46)));
+
+        fullscreenEpisodeButton = button("Серия ▾", true);
+        fullscreenEpisodeButton.setTextSize(11);
+        LinearLayout.LayoutParams epParams = new LinearLayout.LayoutParams(dp(126), dp(46));
+        epParams.leftMargin = dp(8);
+        bar.addView(fullscreenEpisodeButton, epParams);
+        fullscreenEpisodeButton.setOnClickListener(v -> { showFullscreenUi(); showFullscreenSelector(false); });
+
+        LinearLayout volumeBar = new LinearLayout(this);
+        volumeBar.setGravity(Gravity.CENTER_VERTICAL);
+        volumeBar.setPadding(dp(12), dp(4), dp(12), dp(4));
+        volumeBar.setBackground(shape(0xdd111316, 12));
+        FrameLayout.LayoutParams volumeParams = new FrameLayout.LayoutParams(dp(300), dp(58), Gravity.BOTTOM | Gravity.START);
+        volumeParams.setMargins(dp(18), 0, 0, dp(18));
+        fullscreenControls.addView(volumeBar, volumeParams);
+
+        fullscreenMuteButton = button("Звук", false);
+        fullscreenMuteButton.setTextSize(10);
+        fullscreenMuteButton.setOnClickListener(v -> {
+            android.media.AudioManager am = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+            if (am == null) return;
+            int current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+            if (current > 0) {
+                lastNonZeroMusicVolume = current;
+                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 0, 0);
+            } else {
+                int max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, Math.max(1, Math.min(max, lastNonZeroMusicVolume)), 0);
+            }
+            updateFullscreenVolumeUi();
+            showFullscreenUi();
+        });
+        volumeBar.addView(fullscreenMuteButton, new LinearLayout.LayoutParams(dp(74), dp(46)));
+
+        fullscreenVolumeSeek = new android.widget.SeekBar(this);
+        android.media.AudioManager am = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+        int max = am == null ? 15 : Math.max(1, am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC));
+        int current = am == null ? max : am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+        fullscreenVolumeSeek.setMax(max);
+        fullscreenVolumeSeek.setProgress(current);
+        fullscreenVolumeSeek.setFocusable(true);
+        fullscreenVolumeSeek.setContentDescription("Громкость");
+        fullscreenVolumeSeek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                android.media.AudioManager audio = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+                if (audio != null) audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, progress, 0);
+                if (progress > 0) lastNonZeroMusicVolume = progress;
+                updateFullscreenVolumeUi();
+                showFullscreenUi();
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { showFullscreenUi(); }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) { showFullscreenUi(); }
+        });
+        LinearLayout.LayoutParams seekParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        seekParams.leftMargin = dp(8);
+        volumeBar.addView(fullscreenVolumeSeek, seekParams);
+
+        refreshFullscreenSelectors();
+        updateFullscreenVolumeUi();
+        showFullscreenUi();
+    }
+
+    private void updateFullscreenVolumeUi() {
+        android.media.AudioManager am = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+        if (am == null || fullscreenVolumeSeek == null) return;
+        int max = Math.max(1, am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC));
+        int current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+        fullscreenVolumeSeek.setMax(max);
+        if (!fullscreenVolumeSeek.isPressed()) fullscreenVolumeSeek.setProgress(current);
+        if (fullscreenMuteButton != null) fullscreenMuteButton.setText(current == 0 ? "Без звука" : "Звук");
+    }
+
+    private void refreshFullscreenSelectors() {
+        if (web == null) return;
+        final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}" +
+            "var all=[];ds.forEach(function(d,k){[].slice.call(d.querySelectorAll('select')).forEach(function(x,i){if(!x.options||x.options.length<2)return;" +
+            "var n=x,near='';for(var z=0;z<4&&n;z++,n=n.parentElement)if(n.innerText)near+=' '+n.innerText;" +
+            "var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),near].join(' ').toLowerCase();" +
+            "var opts=[].map.call(x.options,function(o){return {text:(o.textContent||'').trim(),value:o.value};});var words=opts.map(function(o){return o.text;}).join(' ').toLowerCase();" +
+            "var season=/season|сезон/.test(meta+' '+words),episode=/episode|серия|эпизод/.test(meta+' '+words);" +
+            "all.push({frameIndex:ids[k],index:i,kind:season?'season':(episode?'episode':'other'),selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts,score:(season||episode?100:0)+(/player|video|serial|series|плеер|сериал/.test(meta)?30:0)});});});" +
+            "var ss=all.filter(function(x){return x.kind==='season'}).sort(function(a,b){return b.score-a.score;});var ee=all.filter(function(x){return x.kind==='episode'}).sort(function(a,b){return b.score-a.score;});" +
+            "if((!ss.length||!ee.length)&&all.length===2){if(!ss.length)ss=[all[0]];if(!ee.length)ee=[all[1]];}" +
+            "return JSON.stringify({season:ss.length?ss[0]:null,episode:ee.length?ee[0]:null});})()";
+        web.evaluateJavascript(js, value -> {
+            try {
+                Object decoded = new org.json.JSONTokener(value == null ? "{}" : value).nextValue();
+                org.json.JSONObject data = new org.json.JSONObject(String.valueOf(decoded));
+                fullscreenSeasonData = data.optJSONObject("season");
+                fullscreenEpisodeData = data.optJSONObject("episode");
+                if (fullscreenSeasonButton != null) fullscreenSeasonButton.setText(fullscreenSeasonData == null ? "Сезон —" : "Сезон: " + fullscreenSeasonData.optString("selectedText", "Выбрать") + " ▾");
+                if (fullscreenEpisodeButton != null) fullscreenEpisodeButton.setText(fullscreenEpisodeData == null ? "Серия —" : "Серия: " + fullscreenEpisodeData.optString("selectedText", "Выбрать") + " ▾");
+            } catch (Exception ignored) { }
+        });
+    }
+
+    private void showFullscreenSelector(boolean season) {
+        org.json.JSONObject data = season ? fullscreenSeasonData : fullscreenEpisodeData;
+        if (data == null) {
+            refreshFullscreenSelectors();
+            Toast.makeText(this, "Список серий не найден на странице плеера.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        org.json.JSONArray options = data.optJSONArray("options");
+        if (options == null || options.length() == 0) return;
+        String[] labels = new String[options.length()];
+        for (int i = 0; i < options.length(); i++) {
+            org.json.JSONObject item = options.optJSONObject(i);
+            labels[i] = item == null ? "" : item.optString("text", "");
+        }
+        new AlertDialog.Builder(this).setTitle(season ? "Выбор сезона" : "Выбор серии")
+            .setItems(labels, (dialog, which) -> {
+                org.json.JSONObject item = options.optJSONObject(which);
+                if (item == null) return;
+                int frame = data.optInt("frameIndex", -1);
+                int index = data.optInt("index", -1);
+                String selected = org.json.JSONObject.quote(item.optString("value", ""));
+                String script = "(function(){var d=document;try{if(" + frame + ">=0)d=window.frames[" + frame + "].document;}catch(e){return false;}" +
+                    "var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + selected + ";" +
+                    "var w=d.defaultView||window;s.dispatchEvent(new w.Event('input',{bubbles:true}));s.dispatchEvent(new w.Event('change',{bubbles:true}));return true;})()";
+                web.evaluateJavascript(script, null);
+                fullscreenUiHandler.postDelayed(this::refreshFullscreenSelectors, 900L);
+                showFullscreenUi();
+            }).setNegativeButton("Отмена", null).show();
+    }
+"""
+if (!s.includes("private void addFullscreenControls()")) {
+    const anchor = "    private void hideCustomView(){";
+    if (!s.includes(anchor)) throw new Error("fullscreen methods anchor missing");
+    s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1);
+}
+
+const viewAnchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));";
+if (s.includes(viewAnchor) && !s.includes("addFullscreenControls();"))
+    s = s.replace(viewAnchor, viewAnchor + "\n                addFullscreenControls();", 1);
+
+const hideAnchor = "if(customView==null)return;";
+if (s.includes(hideAnchor) && !s.includes("fullscreenUiHandler.removeCallbacks(hideFullscreenUi);"))
+    s = s.replace(hideAnchor, hideAnchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1);
+
+const keyAnchor = "    @Override public boolean dispatchKeyEvent(KeyEvent event) {";
+if (s.includes(keyAnchor) && !s.includes("if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();"))
+    s = s.replace(keyAnchor, keyAnchor + "\n        if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();", 1);
 
 # Persist all edits, including the native-player bridge appended above.
 p.write_text(s, encoding="utf-8")
