@@ -598,9 +598,8 @@ methods = r"""
         updateTabs();
     }
 """
-if (!s.includes("private void showThemeDialog()")) {
- s=s.replace("    private void updateFilterLists(){",methods+"\n    private void updateFilterLists(){");
-}
+if "private void showThemeDialog()" not in s:
+    s = s.replace("    private void updateFilterLists(){", methods + "\\n    private void updateFilterLists(){")
 s=s.replace('''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setOnHoverListener((v, event) -> {''', '''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
