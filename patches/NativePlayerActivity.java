@@ -254,11 +254,27 @@ public class NativePlayerActivity extends Activity {
                     return;
                 }
             } catch (Exception ignored) { }
-            if (attempt < 9) {
+            if (attempt < 24) {
                 syncHandler.postDelayed(() -> refreshEpisodeSelectorsWithRetry(which, attempt + 1), 450L);
             } else {
                 Toast.makeText(this, "Сайт не передал список сезонов/серий. Убедитесь, что плеер загрузился.", Toast.LENGTH_LONG).show();
             }
+        }));
+    }
+
+    private void refreshEpisodeSelectorsSilently(int attempt) {
+        MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
+            try {
+                Object decoded = new org.json.JSONTokener(raw == null ? "\\"[]\\"" : raw).nextValue();
+                String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
+                org.json.JSONArray found = new org.json.JSONArray(json);
+                if (found.length() > 0) {
+                    episodeSelectors = found;
+                    updateEpisodeButtonLabels();
+                    return;
+                }
+            } catch (Exception ignored) { }
+            if (attempt < 12) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(attempt + 1), 500L);
         }));
     }
 
@@ -289,6 +305,7 @@ public class NativePlayerActivity extends Activity {
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
                         updateEpisodeButtonLabels();
+                        if (which == 0) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(0), 900L);
                         syncEpisodeStreamAfterSelection();
                     } catch (Exception ignored) { }
                     dialog.dismiss();
