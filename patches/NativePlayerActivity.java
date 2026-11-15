@@ -61,6 +61,7 @@ public class NativePlayerActivity extends Activity {
     private android.widget.LinearLayout assistantControls;
     private boolean controlsLocked = false;
     private boolean controlsVisible = true;
+    private boolean zoomMode = false;
     private final android.os.Handler assistantHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable updateTimeline = new Runnable() {
         @Override public void run() {
@@ -272,8 +273,8 @@ public class NativePlayerActivity extends Activity {
         controlRow.addView(displayButton, displayParams);
         displayButton.setOnClickListener(v -> {
             if (playerView != null) {
-                int mode = playerView.getResizeMode();
-                playerView.setResizeMode(mode == AspectRatioFrameLayout.RESIZE_MODE_FIT
+                zoomMode = !zoomMode;
+                playerView.setResizeMode(zoomMode
                     ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM : AspectRatioFrameLayout.RESIZE_MODE_FIT);
             }
             showAssistantControls();
