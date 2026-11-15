@@ -552,8 +552,7 @@ public class NativePlayerActivity extends Activity {
         t.setTextSize(size);
         t.setGravity(Gravity.CENTER);
         t.setFocusable(true);
-        t.setBackground(android.graphics.drawable.RippleDrawable.createFromXmlInner(
-            getResources(), android.util.Xml.newPullParser(), null));
+        t.setBackgroundColor(0x00000000);
         return t;
     }
     private String formatTime(long ms) {
