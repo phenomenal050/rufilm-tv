@@ -258,6 +258,11 @@ bridge_fields = '''
         if (a == null) return null;
         synchronized (a.mediaCaptureLock) { return a.capturedMediaUrl; }
     }
+    public static long getCapturedMediaAt() {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null) return 0L;
+        synchronized (a.mediaCaptureLock) { return a.capturedMediaAt; }
+    }
     public static String getCapturedMediaSnapshot() {
         MainActivity a = rufilmActiveInstance;
         if (a == null) return "{}";
