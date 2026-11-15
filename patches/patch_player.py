@@ -119,37 +119,35 @@ once('''        @JavascriptInterface public boolean isNativeEnabled() { return "
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }''', "bridge method")
 
 
-# Do not steal playback as soon as a manifest is requested. The user must first
-# choose the season/episode in the site's own selectors and enter fullscreen.
-once('''        launchCapturedMedia();
-    }
+# Keep the site's season/episode selectors usable. Do not launch on manifest discovery.
+import re
+capture_start = s.find("private void captureMediaRequest")
+capture_end = s.find("private boolean launchCapturedMedia", capture_start)
+if capture_start >= 0 and capture_end > capture_start:
+    capture_block = s[capture_start:capture_end]
+    capture_block = capture_block.replace("        launchCapturedMedia();", "        // Wait for the site's fullscreen request after the user selects an episode.")
+    s = s[:capture_start] + capture_block + s[capture_end:]
 
-    private boolean launchCapturedMedia()''', '''        // Playback is launched from WebChromeClient.onShowCustomView only.
-        // This leaves the season and episode selectors usable before fullscreen.
-    }
-
-    private boolean launchCapturedMedia()''', "defer native launch until fullscreen")
-
-# Route the site's HTML5 fullscreen request to the native Media3 player.
-if "onShowCustomView(" not in s:
-    import re
-    pattern = r'(new\s+(?:android\.webkit\.)?WebChromeClient\s*\(\s*\)\s*\{)'
-    replacement = r'''\1
-            @Override
-            public void onShowCustomView(android.view.View view,
-                    android.webkit.WebChromeClient.CustomViewCallback callback) {
+# Intercept the existing WebChromeClient fullscreen callback. The project already
+# defines onShowCustomView, so patch that method instead of adding a duplicate.
+show_pos = s.find("onShowCustomView(")
+if show_pos < 0:
+    raise SystemExit("WebChromeClient fullscreen callback not found.")
+if "launchCapturedMedia()" not in s[show_pos:show_pos + 1800]:
+    method = re.search(
+        r'(public\s+void\s+onShowCustomView\s*\(([^)]*CustomViewCallback\s+(\w+)[^)]*)\)\s*\{)',
+        s
+    )
+    if not method:
+        raise SystemExit("Could not safely identify the fullscreen callback parameter.")
+    callback_name = method.group(3)
+    injected = method.group(1) + """
                 if (launchCapturedMedia()) {
-                    try { callback.onCustomViewHidden(); } catch (Exception ignored) {}
+                    try { CALLBACK.onCustomViewHidden(); } catch (Exception ignored) {}
                     return;
                 }
-                super.onShowCustomView(view, callback);
-            }
-'''
-    s, count = re.subn(pattern, replacement, s, count=1)
-    if count != 1:
-        raise SystemExit("Could not locate WebChromeClient anonymous class; refusing an unsafe fullscreen patch.")
-elif "launchCapturedMedia()" not in s[s.find("onShowCustomView(")-500:s.find("onShowCustomView(")+1200]:
-    raise SystemExit("An existing onShowCustomView handler needs manual integration; refusing to overwrite it.")
+""".replace("CALLBACK", callback_name)
+    s = s[:method.start()] + injected + s[method.end():]
 
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
