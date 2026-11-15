@@ -223,7 +223,7 @@ bridge_fields = '''
 '''
 once('    private boolean externalLaunchPending = false;', '    private boolean externalLaunchPending = false;\n' + bridge_fields, 'native callbacks')
 if 'rufilmActiveInstance = this;' not in s:
-    on_create = re.search(r'(protected\\s+void\\s+onCreate\\s*\\([^)]*\\)\\s*\\{)', s)
+    on_create = re.search(r'(protected\s+void\s+onCreate\s*\([^)]*\)\s*\{)', s)
     if not on_create:
         raise SystemExit('Could not find onCreate for activity reference')
-    s = s[:on_create.end()] + '\\n        rufilmActiveInstance = this;' + s[on_create.end():]
+    s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
