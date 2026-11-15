@@ -222,20 +222,33 @@ public class NativePlayerActivity extends Activity {
         if (episodeSelectors.length() <= which || episodeSelectors.optJSONObject(which) == null ||
                 episodeSelectors.optJSONObject(which).optJSONArray("options") == null ||
                 episodeSelectors.optJSONObject(which).optJSONArray("options").length() == 0) {
-            MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
-                try {
-                    Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
-                    String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
-                    episodeSelectors = new org.json.JSONArray(json);
-                    updateEpisodeButtonLabels();
-                    showEpisodeSelectorNow(which);
-                } catch (Exception e) {
-                    Toast.makeText(this, "Сайт пока не предоставил список сезонов/серий", Toast.LENGTH_SHORT).show();
-                }
-            }));
+            refreshEpisodeSelectorsWithRetry(which, 0);
             return;
         }
         showEpisodeSelectorNow(which);
+    }
+
+    // The embedded player can create its season/episode menus asynchronously.
+    // Retry briefly instead of treating an early empty DOM snapshot as "no episodes".
+    private void refreshEpisodeSelectorsWithRetry(int which, int attempt) {
+        MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
+            try {
+                Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
+                String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
+                org.json.JSONArray found = new org.json.JSONArray(json);
+                if (found.length() > 0) {
+                    episodeSelectors = found;
+                    updateEpisodeButtonLabels();
+                    showEpisodeSelectorNow(which);
+                    return;
+                }
+            } catch (Exception ignored) { }
+            if (attempt < 9) {
+                syncHandler.postDelayed(() -> refreshEpisodeSelectorsWithRetry(which, attempt + 1), 450L);
+            } else {
+                Toast.makeText(this, "Сайт не передал список сезонов/серий. Убедитесь, что плеер загрузился.", Toast.LENGTH_LONG).show();
+            }
+        }));
     }
 
     private void showEpisodeSelectorNow(int which) {
