@@ -79,6 +79,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                 intent.putExtra(NativePlayerActivity.EXTRA_URL, url);
                 intent.putExtra(NativePlayerActivity.EXTRA_REFERER, referer);
                 intent.putExtra(NativePlayerActivity.EXTRA_USER_AGENT, userAgent);
+                intent.putExtra(NativePlayerActivity.EXTRA_HEADERS, headers);
                 if (web != null) {
                     final Intent launchIntent = intent;
                     String snapshotScript = "(function(){var all=[].slice.call(document.querySelectorAll('select'));var sels=all.filter(function(x){return x.options&&x.options.length>1;}).slice(0,2).map(function(x){return {index:all.indexOf(x),selectedText:x.options[x.selectedIndex]?x.options[x.selectedIndex].textContent:'',options:[].map.call(x.options,function(o){return {text:o.textContent,value:o.value,selected:o.selected};})};});var v=document.querySelector('video');return JSON.stringify({selectors:sels,time:v&&isFinite(v.currentTime)?v.currentTime:0});})()";
@@ -221,9 +222,9 @@ bridge_fields = '''
         });
     }
 '''
-once('    private boolean externalLaunchPending = false;', '    private boolean externalLaunchPending = false;\n' + bridge_fields, 'native callbacks')
+once('    private final Object mediaCaptureLock = new Object();', bridge_fields + '    private final Object mediaCaptureLock = new Object();', 'native callbacks')
 if 'rufilmActiveInstance = this;' not in s:
-    on_create = re.search(r'(protected\s+void\s+onCreate\s*\([^)]*\)\s*\{)', s)
+    on_create = re.search(r'((?:public|protected|private)\s+void\s+onCreate\s*\([^)]*\)\s*\{)', s)
     if not on_create:
         raise SystemExit('Could not find onCreate for activity reference')
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
