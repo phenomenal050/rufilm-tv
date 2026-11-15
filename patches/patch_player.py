@@ -550,3 +550,4 @@ if key_anchor in s and key_inject not in s:
 # Persist all edits, including the native-player bridge appended above.
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
+# Rebuild trigger after native assistant controls fix.
