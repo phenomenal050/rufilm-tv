@@ -125,7 +125,6 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                             try { startActivity(launchIntent); }
                             catch (Exception e) {
                                 nativePlayerLaunching = false;
-        syncOriginalPlayback(0L, false);
                                 syncOriginalPlayback(0L, false);
                                 android.util.Log.e("RuFilmTV", "Cannot launch native player", e);
                                 Toast.makeText(MainActivity.this, "Не удалось открыть встроенный плеер", Toast.LENGTH_LONG).show();
@@ -145,9 +144,9 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 '''
 once(anchor, capture+anchor, "capture methods")
 
-once('''                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
+once('''                if (request != null && isAdRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', '''                captureMediaRequest(request);
-                if (request != null && isAdRequest(request.getUrl().toString()))
+                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', "request interception")
 
 once('''          + "if(!/^https?:\\/\\//i.test(u))return false;"''', '''          + "if(!/^https?:\\/\\//i.test(u)){try{if(window.RuFilmPlayer.openCaptured()){v.pause();return true;}}catch(e){}return false;}"''', "blob fallback")
@@ -263,7 +262,7 @@ bridge_fields = '''
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         a.runOnUiThread(() -> {
-            String js = "(function(){var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}var t=" + (Math.max(0L,positionMs)/1000.0) + ";docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else if(w.__rufilmSavedPlayerLayout){var z=w.__rufilmSavedPlayerLayout;z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;w.__rufilmSavedPlayerLayout=null;if(!z.paused){try{var playPromise=v.play();if(playPromise&&playPromise.catch)playPromise.catch(function(){});}catch(e){}}}});return true;})()";
+            String js = "(function(){var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}var t=" + (Math.max(0L,positionMs)/1000.0) + ";docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){w.__rufilmNativeActive=true;v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else{w.__rufilmNativeActive=false;if(w.__rufilmSavedPlayerLayout){var z=w.__rufilmSavedPlayerLayout;z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;w.__rufilmSavedPlayerLayout=null;if(!z.paused){try{var playPromise=v.play();if(playPromise&&playPromise.catch)playPromise.catch(function(){});}catch(e){}}}}});return true;})()";
             a.web.evaluateJavascript(js, null);
         });
     }
@@ -281,7 +280,7 @@ resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\n        nativePlayerLaunching = false;' + s[body_end:]
+        s = s[:body_end] + '\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
@@ -290,6 +289,7 @@ else:
     @Override protected void onResume() {
         super.onResume();
         nativePlayerLaunching = false;
+        syncOriginalPlayback(0L, false);
     }
 
 ''' + s[class_end:]
