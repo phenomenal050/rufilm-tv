@@ -207,7 +207,7 @@ public class NativePlayerActivity extends Activity {
 
     private void updateEpisodeButtonLabels() {
         try {
-            if (episodeSelectors.length() < 2) { seasonButton.setEnabled(false); episodeButton.setEnabled(false); return; }
+            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(true); episodeButton.setEnabled(true); return; }
             org.json.JSONObject season = episodeSelectors.getJSONObject(0);
             org.json.JSONObject episode = episodeSelectors.getJSONObject(1);
             seasonButton.setText("Сезон: " + season.optString("selectedText", "—") + " ▾");
@@ -218,7 +218,7 @@ public class NativePlayerActivity extends Activity {
     }
     private void showEpisodeSelector(int which) {
         try {
-            if (episodeSelectors.length() <= which) return;
+            if (episodeSelectors.length() <= which) { Toast.makeText(this, "Список сезонов/серий не найден на странице", Toast.LENGTH_SHORT).show(); return; }
             org.json.JSONObject selector = episodeSelectors.getJSONObject(which);
             org.json.JSONArray options = selector.optJSONArray("options");
             if (options == null || options.length() == 0) return;
