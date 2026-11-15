@@ -29,8 +29,8 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                 !"GET".equalsIgnoreCase(request.getMethod())) return;
         String url = request.getUrl().toString();
         String lower = url.toLowerCase(Locale.ROOT);
-        saveOriginalPlayerLayout();
         if (!(lower.contains(".m3u8") || lower.contains(".mpd")) || isAdRequest(url)) return;
+        saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
         Map<String, String> safeHeaders = new HashMap<>();
         String referer = null, userAgent = null;
