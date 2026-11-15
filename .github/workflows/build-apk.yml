@@ -35,6 +35,15 @@ jobs:
           gradle-version: '8.9'
       - name: Extract RuFilmTV 3.0.0 project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
+      - name: Export base MainActivity source for inspection
+        run: |
+          cp rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java "$RUNNER_TEMP/MainActivity.java"
+      - name: Upload base source for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: RuFilmTV-source-inspection
+          path: ${{ runner.temp }}/MainActivity.java
+          if-no-files-found: error
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
