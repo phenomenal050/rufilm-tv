@@ -189,7 +189,7 @@ episode_support = r'''
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
             "mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
-            "window.__rufilmTvDpadObserver=new MutationObserver(function(){mark();});" +
+            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;mark();},350);});" +
             "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(script, null);
@@ -235,6 +235,11 @@ bridge_fields = '''
         if (web == null) return;
         final String js = "(function(){var ds=[document];try{for(var i=0;i<window.frames.length;i++)try{ds.push(window.frames[i].document);}catch(e){}}catch(e){}ds.forEach(function(d){try{var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(w.__rufilmSavedPlayerLayout)return;var nodes=[],x=v;while(x){nodes.push({el:x,style:x.getAttribute('style'),cls:x.getAttribute('class')});if(x===d.documentElement)break;x=x.parentElement;}w.__rufilmSavedPlayerLayout={nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused,time:v.currentTime};}catch(e){}});return true;})()";
         runOnUiThread(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+    public static String getCapturedMediaUrl() {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null) return null;
+        synchronized (a.mediaCaptureLock) { return a.capturedMediaUrl; }
     }
     public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
         MainActivity a = rufilmActiveInstance;
