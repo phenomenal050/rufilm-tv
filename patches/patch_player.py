@@ -258,6 +258,21 @@ bridge_fields = '''
         if (a == null) return null;
         synchronized (a.mediaCaptureLock) { return a.capturedMediaUrl; }
     }
+    public static String getCapturedMediaSnapshot() {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null) return "{}";
+        synchronized (a.mediaCaptureLock) {
+            try {
+                org.json.JSONObject result = new org.json.JSONObject();
+                result.put("url", a.capturedMediaUrl);
+                result.put("referer", a.capturedMediaReferer);
+                result.put("userAgent", a.capturedMediaUserAgent);
+                result.put("headers", new org.json.JSONObject(a.capturedMediaHeaders));
+                result.put("capturedAt", a.capturedMediaAt);
+                return result.toString();
+            } catch (Exception e) { return "{}"; }
+        }
+    }
     public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
