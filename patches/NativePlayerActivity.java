@@ -265,7 +265,7 @@ public class NativePlayerActivity extends Activity {
     private void refreshEpisodeSelectorsSilently(int attempt) {
         MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
             try {
-                Object decoded = new org.json.JSONTokener(raw == null ? "\\"[]\\"" : raw).nextValue();
+                Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
                 String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
                 org.json.JSONArray found = new org.json.JSONArray(json);
                 if (found.length() > 0) {
