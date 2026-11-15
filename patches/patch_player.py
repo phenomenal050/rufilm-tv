@@ -149,5 +149,47 @@ if "launchCapturedMedia()" not in s[show_pos:show_pos + 1800]:
 """.replace("CALLBACK", callback_name)
     s = s[:method.start()] + injected + s[method.end():]
 
+
+# Make the site's existing season/episode <select> controls reachable by Android TV DPAD.
+# Keep the site's own change handlers: choosing an option still triggers the site normally.
+episode_support = r'''
+    private void installEpisodeSelectorSupport() {
+        if (web == null) return;
+        final String script = "(function(){try{" +
+            "var styleId='rufilm-tv-dpad-select-style';" +
+            "if(!document.getElementById(styleId)){var st=document.createElement('style');st.id=styleId;" +
+            "st.textContent='select:focus{outline:3px solid #00dce8!important;outline-offset:2px!important;}' +" +
+            "select{min-height:40px;}';document.head.appendChild(st);}" +
+            "function mark(){var list=document.querySelectorAll('select');" +
+            "for(var i=0;i<list.length;i++){var el=list[i];if(!el||!el.options||!el.options.length)continue;" +
+            "el.setAttribute('tabindex','0');" +
+            "var t='';for(var j=0;j<el.options.length;j++)t+=' '+(el.options[j].textContent||'');" +
+            "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
+            "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
+            "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
+            "mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
+            "window.__rufilmTvDpadObserver=new MutationObserver(function(){mark();});" +
+            "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}})();";
+        web.evaluateJavascript(script, null);
+    }
+
+'''
+if "installEpisodeSelectorSupport()" not in s:
+    anchor = "    // Capture HLS/DASH manifests and the request headers used by the WebView."
+    if anchor not in s:
+        raise SystemExit("Could not find insertion point for episode selector support.")
+    s = s.replace(anchor, episode_support + anchor, 1)
+
+if "MainActivity.this.installEpisodeSelectorSupport();" not in s:
+    page_finished = re.search(
+        r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
+        s
+    )
+    if not page_finished:
+        raise SystemExit("Could not find WebViewClient.onPageFinished for DPAD selector setup.")
+    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();"
+    s = s[:page_finished.start()] + insert + s[page_finished.end():]
+
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
