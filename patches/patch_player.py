@@ -527,9 +527,8 @@ fullscreen_methods = r"""
                 showFullscreenUi();
             }).setNegativeButton("Отмена", null).show();
     }
-"""
-if "private void addFullscreenControls()" not in s:
-    anchor = "    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (customView != null && event != null && Build.VERSION.SDK_INT >= 24 &&
                 (event.getAction() == MotionEvent.ACTION_HOVER_ENTER ||
                  event.getAction() == MotionEvent.ACTION_HOVER_MOVE ||
@@ -542,8 +541,9 @@ if "private void addFullscreenControls()" not in s:
         }
         return super.dispatchGenericMotionEvent(event);
     }
-
-    private void hideCustomView(){"
+"""
+if "private void addFullscreenControls()" not in s:
+    anchor = "    private void hideCustomView(){"
     if anchor not in s:
         raise SystemExit("fullscreen methods anchor missing")
     s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
