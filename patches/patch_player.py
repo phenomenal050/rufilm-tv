@@ -228,3 +228,7 @@ if 'rufilmActiveInstance = this;' not in s:
     if not on_create:
         raise SystemExit('Could not find onCreate for activity reference')
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
+
+# Persist all edits, including the native-player bridge appended above.
+p.write_text(s, encoding="utf-8")
+print("Patched", p)
