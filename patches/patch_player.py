@@ -55,7 +55,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
             capturedMediaAt = System.currentTimeMillis();
         }
         android.util.Log.i("RuFilmTV", "Captured media manifest: " + Uri.parse(url).getHost());
-        launchCapturedMedia();
+        // Launch only after the site's fullscreen request; keep episode selection available.
     }
 
     private boolean launchCapturedMedia() {
@@ -90,7 +90,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                         "c.push({frameIndex:fi,index:i,meta:meta,words:words,selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts});});});" +
                         "function pick(re){for(var i=0;i<c.length;i++)if(re.test(c[i].meta+' '+c[i].words))return c[i];return null;}" +
                         "var season=pick(/season|сезон/),episode=pick(/episode|серия|эпизод/);" +
-                        "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||c[1];}" +
+                        "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||(c[0]===season?c[1]:c[0]);}" +
                         "var sels=[];if(season)sels.push(season);if(episode&&episode!==season)sels.push(episode);" +
                         "var v=document.querySelector('video');if(!v){for(var j=1;j<docs.length&&!v;j++)try{v=docs[j].querySelector('video');}catch(e){}}" +
                         "return JSON.stringify({selectors:sels,time:v&&isFinite(v.currentTime)?v.currentTime:0});})()";
@@ -102,7 +102,7 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                             launchIntent.putExtra(NativePlayerActivity.EXTRA_EPISODE_SELECTORS, selectors == null ? "[]" : selectors.toString());
                             launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, (long)(snapshot.optDouble("time", 0.0) * 1000.0));
                         } catch (Exception ignored) { }
-                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var v=document.querySelector('video');if(!window.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n&&nodes.length<8){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});n=n.parentElement;}window.__rufilmSavedPlayerLayout={nodes:nodes,muted:v?v.muted:false,volume:v?v.volume:1};}if(v){v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}return true;})()", null);
+                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n&&nodes.length<8){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});n=n.parentElement;}w.__rufilmSavedPlayerLayout={nodes:nodes,muted:v.muted,volume:v.volume};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';});return true;})()", null);
                         web.postDelayed(() -> {
                             try { startActivity(launchIntent); }
                             catch (Exception e) {
@@ -228,7 +228,7 @@ bridge_fields = '''
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         a.runOnUiThread(() -> {
-            String js = "(function(){var v=document.querySelector('video');if(v){var t=" + (Math.max(0L,positionMs)/1000.0) + ";if(isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else if(window.__rufilmSavedPlayerLayout){var z=window.__rufilmSavedPlayerLayout;z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;window.__rufilmSavedPlayerLayout=null;}}return true;})()";
+            String js = "(function(){var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}var t=" + (Math.max(0L,positionMs)/1000.0) + ";docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else if(w.__rufilmSavedPlayerLayout){var z=w.__rufilmSavedPlayerLayout;z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;w.__rufilmSavedPlayerLayout=null;}});return true;})()";
             a.web.evaluateJavascript(js, null);
         });
     }
