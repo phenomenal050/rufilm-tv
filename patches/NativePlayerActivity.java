@@ -54,6 +54,9 @@ public class NativePlayerActivity extends Activity {
     private Button episodeButton;
     private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
     private String currentMediaUrl;
+    private String currentReferer;
+    private String currentUserAgent;
+    private HashMap<String, String> currentHeaders = new HashMap<>();
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 1200L); } } };
 
@@ -85,6 +88,8 @@ public class NativePlayerActivity extends Activity {
         currentMediaUrl = rawUrl;
         String referer = getIntent().getStringExtra(EXTRA_REFERER);
         String userAgent = getIntent().getStringExtra(EXTRA_USER_AGENT);
+        currentReferer = referer;
+        currentUserAgent = userAgent;
         if (rawUrl == null || !(rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
             Toast.makeText(this, "Не удалось получить прямую ссылку на видео", Toast.LENGTH_LONG).show();
             finish(); return;
@@ -98,11 +103,13 @@ public class NativePlayerActivity extends Activity {
         if (userAgent != null && !userAgent.trim().isEmpty()) headers.put("User-Agent", userAgent);
         if (referer != null && !referer.trim().isEmpty()) {
             headers.put("Referer", referer);
-            try {
-                Uri page = Uri.parse(referer);
-                if (page.getScheme() != null && page.getHost() != null)
-                    headers.put("Origin", page.getScheme() + "://" + page.getHost());
-            } catch (Exception ignored) { }
+            if (!headers.containsKey("Origin")) {
+                try {
+                    Uri page = Uri.parse(referer);
+                    if (page.getScheme() != null && page.getHost() != null)
+                        headers.put("Origin", page.getScheme() + "://" + page.getHost());
+                } catch (Exception ignored) { }
+            }
         }
         try {
             String cookie = CookieManager.getInstance().getCookie(rawUrl);
@@ -111,8 +118,11 @@ public class NativePlayerActivity extends Activity {
         } catch (Exception ignored) { }
 
         String effectiveUa = userAgent == null || userAgent.isEmpty()
-            ? "Mozilla/5.0 (Linux; Android 10; Android TV) AppleWebKit/537.36 Chrome/83.0.4103.120 Safari/537.36"
+            ? android.webkit.WebSettings.getDefaultUserAgent(this)
             : userAgent;
+        currentUserAgent = effectiveUa;
+        currentHeaders.putAll(headers);
+        currentHeaders.put("User-Agent", effectiveUa);
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
             .setUserAgent(effectiveUa)
             .setAllowCrossProtocolRedirects(true)
@@ -286,18 +296,57 @@ public class NativePlayerActivity extends Activity {
     private void syncEpisodeStreamAfterSelection() {
         syncHandler.postDelayed(() -> {
             if (player == null) return;
-            String updated = MainActivity.getCapturedMediaUrl();
-            if (updated != null && !updated.equals(currentMediaUrl)) {
-                currentMediaUrl = updated;
-                MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(updated));
-                String lower = updated.toLowerCase(Locale.ROOT);
-                if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-                player.setMediaItem(item.build());
-                player.prepare();
-                player.play();
+            try {
+                org.json.JSONObject snapshot = new org.json.JSONObject(MainActivity.getCapturedMediaSnapshot());
+                String updated = snapshot.optString("url", "");
+                if (updated.isEmpty() || updated.equals(currentMediaUrl)) return;
+                HashMap<String, String> headers = new HashMap<>();
+                org.json.JSONObject jsonHeaders = snapshot.optJSONObject("headers");
+                if (jsonHeaders != null) {
+                    java.util.Iterator<String> keys = jsonHeaders.keys();
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        headers.put(key, jsonHeaders.optString(key, ""));
+                    }
+                }
+                String referer = snapshot.optString("referer", currentReferer == null ? "" : currentReferer);
+                String ua = snapshot.optString("userAgent", currentUserAgent == null ? "" : currentUserAgent);
+                switchCapturedStream(updated, referer, ua, headers);
+            } catch (Exception e) {
+                android.util.Log.w("RuFilmTV", "Could not refresh stream after episode selection", e);
             }
-        }, 2200L);
+        }, 2600L);
+    }
+
+    private void switchCapturedStream(String url, String referer, String userAgent, HashMap<String, String> headers) {
+        if (player == null || url == null || url.isEmpty()) return;
+        if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);
+        if (userAgent != null && !userAgent.isEmpty()) headers.put("User-Agent", userAgent);
+        try {
+            String cookie = CookieManager.getInstance().getCookie(url);
+            if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
+        } catch (Exception ignored) { }
+        String ua = (userAgent == null || userAgent.isEmpty())
+            ? android.webkit.WebSettings.getDefaultUserAgent(this) : userAgent;
+        headers.put("User-Agent", ua);
+        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
+            .setUserAgent(ua)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(45000)
+            .setDefaultRequestProperties(headers);
+        DefaultMediaSourceFactory factory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, httpFactory));
+        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(url));
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+        else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+        player.setMediaSource(factory.createMediaSource(item.build()));
+        currentMediaUrl = url;
+        currentReferer = referer;
+        currentUserAgent = ua;
+        currentHeaders = new HashMap<>(headers);
+        player.prepare();
+        player.play();
     }
     private boolean hasVideoTracks() {
         if (trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) return false;
