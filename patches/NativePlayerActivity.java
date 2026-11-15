@@ -52,6 +52,9 @@ public class NativePlayerActivity extends Activity {
     private Button qualityButton;
     private Button seasonButton;
     private Button episodeButton;
+    private Button volumeButton;
+    private android.widget.SeekBar volumeSeekBar;
+    private float volumeBeforeMute = 1.0f;
     private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
     private String currentMediaUrl;
     private String currentReferer;
@@ -59,7 +62,7 @@ public class NativePlayerActivity extends Activity {
     private HashMap<String, String> currentHeaders = new HashMap<>();
     private long captureBaselineForSelection = 0L;
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 1200L); } } };
+    private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null && !isFinishing()) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 650L); } } };
 
     private static class QualityOption {
         final TrackGroup group;
@@ -153,6 +156,50 @@ public class NativePlayerActivity extends Activity {
         playerView.setPlayer(player);
         root.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
+        // TV-friendly volume slider; the default controller has no dependable volume control.
+        android.widget.LinearLayout volumeBar = new android.widget.LinearLayout(this);
+        volumeBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        volumeBar.setGravity(Gravity.CENTER_VERTICAL);
+        volumeBar.setPadding(dp(10), dp(6), dp(10), dp(6));
+        volumeBar.setBackgroundColor(0x99000000);
+        FrameLayout.LayoutParams volumeParams = new FrameLayout.LayoutParams(dp(300), dp(52), Gravity.BOTTOM | Gravity.START);
+        volumeParams.setMargins(dp(18), 0, 0, dp(22));
+        root.addView(volumeBar, volumeParams);
+        volumeButton = new Button(this);
+        volumeButton.setText("🔊");
+        volumeButton.setContentDescription("Выключить звук");
+        volumeButton.setFocusable(true);
+        volumeButton.setMinWidth(dp(52));
+        volumeButton.setOnClickListener(v -> {
+            if (player == null) return;
+            if (player.getVolume() > 0.001f) {
+                volumeBeforeMute = player.getVolume(); player.setVolume(0f);
+                volumeButton.setText("🔇"); volumeButton.setContentDescription("Включить звук");
+                if (volumeSeekBar != null) volumeSeekBar.setProgress(0);
+            } else {
+                float restored = volumeBeforeMute > 0.001f ? volumeBeforeMute : 1.0f;
+                player.setVolume(restored); volumeButton.setText("🔊");
+                volumeButton.setContentDescription("Выключить звук");
+                if (volumeSeekBar != null) volumeSeekBar.setProgress(Math.round(restored * 100f));
+            }
+        });
+        volumeBar.addView(volumeButton, new android.widget.LinearLayout.LayoutParams(dp(58), dp(44)));
+        volumeSeekBar = new android.widget.SeekBar(this);
+        volumeSeekBar.setMax(100); volumeSeekBar.setProgress(100);
+        volumeSeekBar.setContentDescription("Громкость"); volumeSeekBar.setFocusable(true);
+        volumeSeekBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (!fromUser || player == null) return;
+                float value = Math.max(0, Math.min(100, progress)) / 100f; player.setVolume(value);
+                if (value > 0.001f) { volumeBeforeMute = value; volumeButton.setText("🔊"); volumeButton.setContentDescription("Выключить звук"); }
+                else { volumeButton.setText("🔇"); volumeButton.setContentDescription("Включить звук"); }
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) { }
+        });
+        android.widget.LinearLayout.LayoutParams seekParams = new android.widget.LinearLayout.LayoutParams(0, dp(42), 1f);
+        seekParams.leftMargin = dp(8); volumeBar.addView(volumeSeekBar, seekParams);
+
         android.widget.LinearLayout selectorBar = new android.widget.LinearLayout(this);
         selectorBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         selectorBar.setGravity(Gravity.END);
@@ -220,7 +267,7 @@ public class NativePlayerActivity extends Activity {
 
     private void updateEpisodeButtonLabels() {
         try {
-            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(true); episodeButton.setEnabled(true); return; }
+            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(false); episodeButton.setEnabled(false); return; }
             org.json.JSONObject season = episodeSelectors.getJSONObject(0);
             org.json.JSONObject episode = episodeSelectors.getJSONObject(1);
             seasonButton.setText("Сезон: " + season.optString("selectedText", "—") + " ▾");
