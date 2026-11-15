@@ -43,11 +43,18 @@ public class NativePlayerActivity extends Activity {
     public static final String EXTRA_REFERER = "media_referer";
     public static final String EXTRA_USER_AGENT = "media_user_agent";
     public static final String EXTRA_HEADERS = "media_headers";
+    public static final String EXTRA_EPISODE_SELECTORS = "episode_selectors";
+    public static final String EXTRA_START_POSITION_MS = "start_position_ms";
 
     private ExoPlayer player;
     private PlayerView playerView;
     private DefaultTrackSelector trackSelector;
     private Button qualityButton;
+    private Button seasonButton;
+    private Button episodeButton;
+    private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
+    private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 1200L); } } };
 
     private static class QualityOption {
         final TrackGroup group;
@@ -133,16 +140,35 @@ public class NativePlayerActivity extends Activity {
         playerView.setPlayer(player);
         root.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
+        android.widget.LinearLayout selectorBar = new android.widget.LinearLayout(this);
+        selectorBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        selectorBar.setGravity(Gravity.END);
+        FrameLayout.LayoutParams barParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP | Gravity.END);
+        int margin = dp(18);
+        barParams.setMargins(margin, margin, margin, margin);
+        root.addView(selectorBar, barParams);
+        seasonButton = new Button(this);
+        seasonButton.setText("Сезон ▾");
+        seasonButton.setFocusable(true);
+        seasonButton.setOnClickListener(v -> showEpisodeSelector(0));
+        selectorBar.addView(seasonButton);
+        episodeButton = new Button(this);
+        episodeButton.setText("Серия ▾");
+        episodeButton.setFocusable(true);
+        episodeButton.setOnClickListener(v -> showEpisodeSelector(1));
+        selectorBar.addView(episodeButton);
         qualityButton = new Button(this);
         qualityButton.setText("Качество ▾");
         qualityButton.setFocusable(true);
         qualityButton.setOnClickListener(v -> showQualityDialog());
-        FrameLayout.LayoutParams qualityParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.TOP | Gravity.END);
-        int margin = dp(18);
-        qualityParams.setMargins(margin, margin, margin, margin);
-        root.addView(qualityButton, qualityParams);
+        selectorBar.addView(qualityButton);
+        try {
+            String selectors = getIntent().getStringExtra(EXTRA_EPISODE_SELECTORS);
+            if (selectors != null) episodeSelectors = new org.json.JSONArray(selectors);
+        } catch (Exception ignored) { }
+        updateEpisodeButtonLabels();
         setContentView(root);
 
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
@@ -150,6 +176,8 @@ public class NativePlayerActivity extends Activity {
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
         player.setMediaItem(item.build());
+        long startPosition = getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L);
+        if (startPosition > 0L) player.seekTo(startPosition);
         player.addListener(new Player.Listener() {
             @Override public void onPlayerError(androidx.media3.common.PlaybackException error) {
                 String detail = "Ошибка потока, код: " + error.errorCode;
@@ -174,6 +202,46 @@ public class NativePlayerActivity extends Activity {
         });
         player.prepare();
         player.play();
+        syncHandler.postDelayed(syncRunnable, 1200L);
+    }
+
+    private void updateEpisodeButtonLabels() {
+        try {
+            if (episodeSelectors.length() < 2) { seasonButton.setEnabled(false); episodeButton.setEnabled(false); return; }
+            org.json.JSONObject season = episodeSelectors.getJSONObject(0);
+            org.json.JSONObject episode = episodeSelectors.getJSONObject(1);
+            seasonButton.setText("Сезон: " + season.optString("selectedText", "—") + " ▾");
+            episodeButton.setText("Серия: " + episode.optString("selectedText", "—") + " ▾");
+            seasonButton.setEnabled(season.optJSONArray("options") != null && season.optJSONArray("options").length() > 0);
+            episodeButton.setEnabled(episode.optJSONArray("options") != null && episode.optJSONArray("options").length() > 0);
+        } catch (Exception ignored) { }
+    }
+    private void showEpisodeSelector(int which) {
+        try {
+            if (episodeSelectors.length() <= which) return;
+            org.json.JSONObject selector = episodeSelectors.getJSONObject(which);
+            org.json.JSONArray options = selector.optJSONArray("options");
+            if (options == null || options.length() == 0) return;
+            String[] labels = new String[options.length()];
+            int selected = 0;
+            for (int i = 0; i < options.length(); i++) {
+                org.json.JSONObject option = options.getJSONObject(i);
+                labels[i] = option.optString("text", option.optString("value", ""));
+                if (option.optBoolean("selected", false)) selected = i;
+            }
+            final int selectIndex = selector.optInt("index", which);
+            new AlertDialog.Builder(this).setTitle(which == 0 ? "Выбор сезона" : "Выбор серии")
+                .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
+                    try {
+                        String value = options.getJSONObject(choice).optString("value", "");
+                        MainActivity.applyEpisodeSelection(selectIndex, value);
+                        selector.put("selectedText", labels[choice]);
+                        for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
+                        updateEpisodeButtonLabels();
+                    } catch (Exception ignored) { }
+                    dialog.dismiss();
+                }).setNegativeButton("Закрыть", null).show();
+        } catch (Exception e) { Toast.makeText(this, "Не удалось открыть список", Toast.LENGTH_SHORT).show(); }
     }
 
     private boolean hasVideoTracks() {
@@ -236,7 +304,9 @@ public class NativePlayerActivity extends Activity {
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
     @Override protected void onDestroy() { releasePlayer(); super.onDestroy(); }
     private void releasePlayer() {
+        syncHandler.removeCallbacks(syncRunnable);
         if (player != null) {
+            MainActivity.syncOriginalPlayback(player.getCurrentPosition(), false);
             if (playerView != null) playerView.setPlayer(null);
             player.release(); player = null;
         }
