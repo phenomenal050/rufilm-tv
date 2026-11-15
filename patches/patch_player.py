@@ -82,12 +82,12 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                 intent.putExtra(NativePlayerActivity.EXTRA_HEADERS, headers);
                 if (web != null) {
                     final Intent launchIntent = intent;
-                    String snapshotScript = "(function(){var docs=[document];try{for(var fi=0;fi<window.frames.length;fi++){try{var d=window.frames[fi].document;if(d)docs.push(d);}catch(e){}}}catch(e){}" +
+                    String snapshotScript = "(function(){var docs=[document],frameIds=[-1];try{for(var fi=0;fi<window.frames.length;fi++){try{var d=window.frames[fi].document;if(d){docs.push(d);frameIds.push(fi);}}catch(e){}}}catch(e){}" +
                         "var c=[];docs.forEach(function(d,fi){[].slice.call(d.querySelectorAll('select')).forEach(function(x,i){if(!x.options||x.options.length<2)return;" +
                         "var p=x.parentElement;var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?p.innerText:''].join(' ').toLowerCase();" +
                         "var opts=[].map.call(x.options,function(o){return {text:(o.textContent||'').trim(),value:o.value,selected:o.selected};});" +
                         "var words=opts.map(function(o){return o.text;}).join(' ').toLowerCase();" +
-                        "c.push({frameIndex:fi,index:i,meta:meta,words:words,selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts});});});" +
+                        "c.push({frameIndex:frameIds[fi],index:i,meta:meta,words:words,selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts});});});" +
                         "function pick(re){for(var i=0;i<c.length;i++)if(re.test(c[i].meta+' '+c[i].words))return c[i];return null;}" +
                         "var season=pick(/season|сезон/),episode=pick(/episode|серия|эпизод/);" +
                         "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||(c[0]===season?c[1]:c[0]);}" +
@@ -222,7 +222,7 @@ bridge_fields = '''
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
-        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">0)d=window.frames[" + (frameIndex - 1) + "].document;}catch(e){}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()", null));
+        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()", null));
     }
     public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
         MainActivity a = rufilmActiveInstance;
