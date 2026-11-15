@@ -258,11 +258,11 @@ if 'rufilmActiveInstance = this;' not in s:
 
 # Release the launch guard when returning from NativePlayerActivity.
 # MainActivity receives onResume after the native player is closed.
-resume = re.search(r'((?:public|protected)\\s+void\\s+onResume\\s*\\(\\s*\\)\\s*\\{)', s)
+resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s)
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\\n        nativePlayerLaunching = false;' + s[body_end:]
+        s = s[:body_end] + '\n        nativePlayerLaunching = false;' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
