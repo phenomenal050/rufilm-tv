@@ -35,12 +35,6 @@ jobs:
           gradle-version: '8.9'
       - name: Extract RuFilmTV 3.0.0 project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
-      - name: Inspect extracted Android sources
-        run: |
-          echo '--- JAVA/KOTLIN SOURCE FILES ---'
-          find rufilm-tv-2.9/app/src/main -type f \\( -name '*.java' -o -name '*.kt' \\) -print
-          echo '--- MAIN ACTIVITY ---'
-          find rufilm-tv-2.9/app/src/main -type f -name 'MainActivity.java' -exec sed -n '1,320p' {} \\;
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
