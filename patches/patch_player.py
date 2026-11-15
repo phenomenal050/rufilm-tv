@@ -79,20 +79,28 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
                 intent.putExtra(NativePlayerActivity.EXTRA_URL, url);
                 intent.putExtra(NativePlayerActivity.EXTRA_REFERER, referer);
                 intent.putExtra(NativePlayerActivity.EXTRA_USER_AGENT, userAgent);
-                intent.putExtra(NativePlayerActivity.EXTRA_HEADERS, headers);
-                // Stop WebView playback before the native surface becomes visible.
                 if (web != null) {
-                    web.evaluateJavascript("(function(){function stop(d){try{d.querySelectorAll('video,audio').forEach(function(v){try{v.pause();}catch(e){}});d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)stop(f.contentDocument);}catch(e){}});}catch(e){}}stop(document);return true;})()", null);
-                    web.onPause();
-                    web.postDelayed(() -> {
-                        try { startActivity(intent); }
-                        catch (Exception e) {
-                            nativePlayerLaunching = false;
-                            web.onResume();
-                            android.util.Log.e("RuFilmTV", "Cannot launch native player", e);
-                            Toast.makeText(MainActivity.this, "Не удалось открыть встроенный плеер", Toast.LENGTH_LONG).show();
-                        }
-                    }, 350L);
+                    final Intent launchIntent = intent;
+                    String snapshotScript = "(function(){var all=[].slice.call(document.querySelectorAll('select'));var sels=all.filter(function(x){return x.options&&x.options.length>1;}).slice(0,2).map(function(x){return {index:all.indexOf(x),selectedText:x.options[x.selectedIndex]?x.options[x.selectedIndex].textContent:'',options:[].map.call(x.options,function(o){return {text:o.textContent,value:o.value,selected:o.selected};})};});var v=document.querySelector('video');return JSON.stringify({selectors:sels,time:v&&isFinite(v.currentTime)?v.currentTime:0});})()";
+                    web.evaluateJavascript(snapshotScript, value -> {
+                        try {
+                            Object decoded = new org.json.JSONTokener(value == null ? "{}" : value).nextValue();
+                            org.json.JSONObject snapshot = new org.json.JSONObject(String.valueOf(decoded));
+                            org.json.JSONArray selectors = snapshot.optJSONArray("selectors");
+                            launchIntent.putExtra(NativePlayerActivity.EXTRA_EPISODE_SELECTORS, selectors == null ? "[]" : selectors.toString());
+                            launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, (long)(snapshot.optDouble("time", 0.0) * 1000.0));
+                        } catch (Exception ignored) { }
+                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;document.querySelectorAll('video').forEach(function(v){v.dataset.rufilmPrevOpacity=v.style.opacity||'';v.dataset.rufilmPrevPointer=v.style.pointerEvents||'';v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';});return true;})()", null);
+                        web.postDelayed(() -> {
+                            try { startActivity(launchIntent); }
+                            catch (Exception e) {
+                                nativePlayerLaunching = false;
+                                syncOriginalPlayback(0L, false);
+                                android.util.Log.e("RuFilmTV", "Cannot launch native player", e);
+                                Toast.makeText(MainActivity.this, "Не удалось открыть встроенный плеер", Toast.LENGTH_LONG).show();
+                            }
+                        }, 250L);
+                    });
                 } else startActivity(intent);
             } catch (Exception e) {
                 nativePlayerLaunching = false;
@@ -193,3 +201,29 @@ if "MainActivity.this.installEpisodeSelectorSupport();" not in s:
 
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
+
+
+# Expose the current activity for the native player's episode and clock callbacks.
+bridge_fields = '''
+    private static MainActivity rufilmActiveInstance;
+    public static void applyEpisodeSelection(int index, String value) {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null || a.web == null) return;
+        final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
+        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var s=document.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()", null));
+    }
+    public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
+        MainActivity a = rufilmActiveInstance;
+        if (a == null || a.web == null) return;
+        a.runOnUiThread(() -> {
+            String js = "(function(){var v=document.querySelector('video');if(!v)return false;var t=" + (Math.max(0L,positionMs)/1000.0) + ";if(isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else{v.style.opacity=v.dataset.rufilmPrevOpacity||'';v.style.pointerEvents=v.dataset.rufilmPrevPointer||'';v.muted=false;}return true;})()";
+            a.web.evaluateJavascript(js, null);
+        });
+    }
+'''
+once('    private boolean externalLaunchPending = false;', '    private boolean externalLaunchPending = false;\n' + bridge_fields, 'native callbacks')
+if 'rufilmActiveInstance = this;' not in s:
+    on_create = re.search(r'(protected\\s+void\\s+onCreate\\s*\\([^)]*\\)\\s*\\{)', s)
+    if not on_create:
+        raise SystemExit('Could not find onCreate for activity reference')
+    s = s[:on_create.end()] + '\\n        rufilmActiveInstance = this;' + s[on_create.end():]
