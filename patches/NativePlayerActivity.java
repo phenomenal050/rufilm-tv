@@ -331,7 +331,9 @@ public class NativePlayerActivity extends Activity {
         });
         player.prepare();
         player.play();
-        syncHandler.postDelayed(syncRunnable, 1200L);\n        assistantHandler.post(updateTimeline);\n        scheduleAssistantHide();
+        syncHandler.postDelayed(syncRunnable, 1200L);
+        assistantHandler.post(updateTimeline);
+        scheduleAssistantHide();
     }
 
     private void updateEpisodeButtonLabels() {
@@ -595,7 +597,9 @@ public class NativePlayerActivity extends Activity {
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
     @Override protected void onDestroy() { releasePlayer(); super.onDestroy(); }
     private void releasePlayer() {
-        syncHandler.removeCallbacks(syncRunnable);\n        assistantHandler.removeCallbacks(updateTimeline);\n        assistantHandler.removeCallbacks(hideAssistantRunnable);
+        syncHandler.removeCallbacks(syncRunnable);
+        assistantHandler.removeCallbacks(updateTimeline);
+        assistantHandler.removeCallbacks(hideAssistantRunnable);
         if (player != null) {
             MainActivity.syncOriginalPlayback(player.getCurrentPosition(), false);
             if (playerView != null) playerView.setPlayer(null);
