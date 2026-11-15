@@ -103,15 +103,6 @@ capture = '''    // Capture HLS/DASH manifests and the request headers used by t
         return true;
     }
 
-    @Override protected void onResume() {
-        super.onResume();
-        nativePlayerLaunching = false;
-        if (web != null) {
-            web.onResume();
-            web.evaluateJavascript("(function(){document.querySelectorAll('video,audio').forEach(function(v){try{v.pause();}catch(e){}});})()", null);
-        }
-    }
-
 '''
 once(anchor, capture+anchor, "capture methods")
 
