@@ -240,12 +240,26 @@ bridge_fields = '''
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
-        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()", null));
+        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){return false;}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";var w=d.defaultView||window;s.dispatchEvent(new w.Event('input',{bubbles:true}));s.dispatchEvent(new w.Event('change',{bubbles:true}));return true;})()", null));
     }
     public static void refreshEpisodeSelectors(android.webkit.ValueCallback<String> callback) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) { if (callback != null) callback.onReceiveValue("[]"); return; }
-        final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}var all=[];ds.forEach(function(d,k){[].slice.call(d.querySelectorAll('select')).forEach(function(x,i){if(!x.options||x.options.length<2)return;var p=x.parentElement;var m=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?p.innerText:''].join(' ').toLowerCase();var o=[].map.call(x.options,function(v){return {text:(v.textContent||'').trim(),value:v.value,selected:v.selected};});all.push({frameIndex:ids[k],index:i,meta:m,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:o.map(function(v){return v.text;}).join(' ').toLowerCase()});});});function pick(r){for(var j=0;j<all.length;j++)if(r.test(all[j].meta+' '+all[j].words))return all[j];return null;}var a=pick(/season|сезон/),b=pick(/episode|серия|эпизод/);if(!a&&all.length)a=all[0];if(!b&&all.length>1)b=(a===all[0]?all[1]:all[0]);var z=[];if(a)z.push(a);if(b&&b!==a)z.push(b);return JSON.stringify(z);})()";
+        final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}" +
+            "var all=[];ds.forEach(function(d,k){var v=d.querySelector('video');var sels=[].slice.call(d.querySelectorAll('select'));sels.forEach(function(x,i){if(!x.options||x.options.length<2)return;" +
+            "var p=x.parentElement;var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?p.innerText:''].join(' ').toLowerCase();" +
+            "var o=[].map.call(x.options,function(q){return {text:(q.textContent||'').trim(),value:q.value,selected:q.selected};});var words=o.map(function(q){return q.text;}).join(' ').toLowerCase();" +
+            "var season=/season|сезон/.test(meta+' '+words),episode=/episode|серия|эпизод/.test(meta+' '+words);" +
+            "var score=(season?100:0)+(episode?100:0)+(/player|video|serial|series|плеер|сериал/.test(meta)?35:0);" +
+            "if(v){var n=x,dist=0;while(n&&n!==v&&dist<12){n=n.parentElement;dist++;}if(n===v)score+=25;else if(/player|video|serial|series|плеер|сериал/.test(meta))score+=15;}" +
+            "if(o.some(function(q){return /сезон|season/.test(q.text.toLowerCase());}))score+=30;" +
+            "if(o.some(function(q){return /серия|эпизод|episode/.test(q.text.toLowerCase());}))score+=30;" +
+            "if(o.length>80)score-=25;all.push({frameIndex:ids[k],index:i,meta:meta,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:words,score:score,kind:season?'season':(episode?'episode':'other')});});});" +
+            "var seasons=all.filter(function(x){return x.kind==='season'}).sort(function(a,b){return b.score-a.score;});" +
+            "var episodes=all.filter(function(x){return x.kind==='episode'}).sort(function(a,b){return b.score-a.score;});" +
+            "if(!seasons.length||!episodes.length){var rest=all.filter(function(x){return x.kind==='other'}).sort(function(a,b){return b.score-a.score;});" +
+            "if(!seasons.length&&rest.length)seasons.push(rest.shift());if(!episodes.length&&rest.length)episodes.push(rest.shift());}" +
+            "var z=[];if(seasons.length)z.push(seasons[0]);if(episodes.length)z.push(episodes[0]);return JSON.stringify(z);})()";
         a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, callback); else if (callback != null) callback.onReceiveValue("[]"); });
     }
     private void saveOriginalPlayerLayout() {
