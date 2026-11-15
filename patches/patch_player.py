@@ -188,12 +188,15 @@ episode_support = r'''
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
             "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
             "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
-            "b.style.cssText='position:fixed;z-index:2147483647;width:50px;height:50px;border:0;border-radius:50%;background:rgba(111,113,239,.96);box-shadow:0 2px 9px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;opacity:.96;-webkit-tap-highlight-color:transparent;';" +
-            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var p=v;for(var i=0;i<5&&p&&p.parentElement;i++,p=p.parentElement){if(p.getBoundingClientRect&&p.getBoundingClientRect().width>=v.getBoundingClientRect().width*.98)break;}" +
-            "try{var q=v.requestFullscreen||v.webkitRequestFullscreen||p.requestFullscreen||p.webkitRequestFullscreen;if(q){var z=q.call(v.requestFullscreen||v.webkitRequestFullscreen?v:p);if(z&&z.catch)z.catch(function(){});}}catch(x){}},true);" +
+            "b.style.cssText='position:fixed;z-index:2147483647;width:52px;height:52px;border:1px solid rgba(255,255,255,.72);border-radius:50%;background:rgba(105,91,226,.97);box-shadow:0 4px 16px rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;opacity:.98;-webkit-tap-highlight-color:transparent;';" +
+            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var ok=false;" +
+            "try{if(window.RuFilmPlayer&&window.RuFilmPlayer.openCaptured)ok=window.RuFilmPlayer.openCaptured();}catch(x){}" +
+            "if(!ok){try{var u=v.currentSrc||v.src;if(u&&/^https?:\\/\\//i.test(u)&&window.RuFilmPlayer&&window.RuFilmPlayer.openNative)ok=window.RuFilmPlayer.openNative(String(u),String(location.href),String(navigator.userAgent));}catch(x){}}" +
+            "if(!ok){b.title='Поток ещё загружается — попробуйте через пару секунд';b.style.background='rgba(190,78,70,.98)';setTimeout(function(){b.style.background='rgba(105,91,226,.97)';},900);}" +
+            "},true);" +
             "document.body.appendChild(b);v.__rufilmFsButton=b;function place(){try{var r=v.getBoundingClientRect(),w=document.documentElement.clientWidth,h=document.documentElement.clientHeight;" +
-            "var visible=r.width>80&&r.height>45&&r.bottom>0&&r.top<h&&r.right>0&&r.left<w&&getComputedStyle(v).visibility!=='hidden'&&getComputedStyle(v).display!=='none';" +
-            "b.style.display=visible?'flex':'none';if(visible){b.style.left=Math.max(8,Math.min(w-58,r.right-62))+'px';b.style.top=Math.max(8,Math.min(h-58,r.bottom-62))+'px';}}catch(x){b.style.display='none';}}" +
+            "var visible=!v.paused&&r.width>120&&r.height>70&&r.bottom>0&&r.top<h&&r.right>0&&r.left<w&&getComputedStyle(v).visibility!=='hidden'&&getComputedStyle(v).display!=='none';" +
+            "b.style.display=visible?'flex':'none';if(visible){var x=Math.max(8,Math.min(w-60,r.left+(r.width-52)/2));var y=r.bottom+9;if(y+52>h)y=Math.max(8,r.bottom-60);b.style.left=x+'px';b.style.top=y+'px';}}catch(x){b.style.display='none';}}" +
             "['loadedmetadata','play','pause','timeupdate','durationchange','emptied'].forEach(function(e){v.addEventListener(e,place);});" +
             "window.addEventListener('resize',place);window.addEventListener('scroll',place,true);place();v.__rufilmFsPlace=place;});}" +
             "installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
