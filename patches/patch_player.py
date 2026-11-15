@@ -247,14 +247,13 @@ bridge_fields = '''
         if (a == null || a.web == null) { if (callback != null) callback.onReceiveValue("[]"); return; }
         final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}" +
             "var all=[];ds.forEach(function(d,k){var v=d.querySelector('video');var sels=[].slice.call(d.querySelectorAll('select'));sels.forEach(function(x,i){if(!x.options||x.options.length<2)return;" +
-            "var p=x.parentElement;var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?p.innerText:''].join(' ').toLowerCase();" +
+            "var p=x.parentElement;var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title')].join(' ').toLowerCase();var nearby=p?p.innerText.toLowerCase():'';" +
             "var o=[].map.call(x.options,function(q){return {text:(q.textContent||'').trim(),value:q.value,selected:q.selected};});var words=o.map(function(q){return q.text;}).join(' ').toLowerCase();" +
-            "var season=/season|сезон/.test(meta+' '+words),episode=/episode|серия|эпизод/.test(meta+' '+words);" +
-            "var score=(season?100:0)+(episode?100:0)+(/player|video|serial|series|плеер|сериал/.test(meta)?35:0);" +
-            "if(v){var n=x,dist=0;while(n&&n!==v&&dist<12){n=n.parentElement;dist++;}if(n===v)score+=25;else if(/player|video|serial|series|плеер|сериал/.test(meta))score+=15;}" +
-            "if(o.some(function(q){return /сезон|season/.test(q.text.toLowerCase());}))score+=30;" +
-            "if(o.some(function(q){return /серия|эпизод|episode/.test(q.text.toLowerCase());}))score+=30;" +
-            "if(o.length>80)score-=25;all.push({frameIndex:ids[k],index:i,meta:meta,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:words,score:score,kind:season?'season':(episode?'episode':'other')});});});" +
+            "var sm=/season|сезон/.test(meta),em=/episode|серия|эпизод/.test(meta),sw=/season|сезон/.test(words),ew=/episode|серия|эпизод/.test(words);" +
+            "var kind=sm?'season':(em?'episode':(sw&&!ew?'season':(ew&&!sw?'episode':'other')));" +
+            "var score=(kind==='other'?0:100)+(/player|video|serial|series|плеер|сериал/.test(meta+' '+nearby)?35:0);" +
+            "if(v){var n=v,dist=0;while(n&&dist<9){if(n.contains&&n.contains(x)){score+=Math.max(5,30-dist*3);break;}n=n.parentElement;dist++;}}" +
+            "if(o.length>80)score-=25;all.push({frameIndex:ids[k],index:i,meta:meta,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:words,score:score,kind:kind});});});" +
             "var seasons=all.filter(function(x){return x.kind==='season'}).sort(function(a,b){return b.score-a.score;});" +
             "var episodes=all.filter(function(x){return x.kind==='episode'}).sort(function(a,b){return b.score-a.score;});" +
             "if(!seasons.length||!episodes.length){var rest=all.filter(function(x){return x.kind==='other'}).sort(function(a,b){return b.score-a.score;});" +
