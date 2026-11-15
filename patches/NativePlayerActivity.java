@@ -55,6 +55,29 @@ public class NativePlayerActivity extends Activity {
     private Button volumeButton;
     private android.widget.SeekBar volumeSeekBar;
     private float volumeBeforeMute = 1.0f;
+    private android.widget.SeekBar timelineSeek;
+    private android.widget.TextView currentTimeText, durationTimeText, playPauseButton;
+    private android.widget.TextView lockButton, displayButton;
+    private android.widget.LinearLayout assistantControls;
+    private boolean controlsLocked = false;
+    private boolean controlsVisible = true;
+    private final android.os.Handler assistantHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable updateTimeline = new Runnable() {
+        @Override public void run() {
+            if (player != null && timelineSeek != null) {
+                long duration = player.getDuration();
+                long position = player.getCurrentPosition();
+                if (duration > 0 && duration != C.TIME_UNSET) {
+                    if (!timelineSeek.isPressed()) timelineSeek.setProgress((int)Math.min(1000L, position * 1000L / duration));
+                    durationTimeText.setText(formatTime(duration));
+                }
+                currentTimeText.setText(formatTime(position));
+                playPauseButton.setText(player.isPlaying() ? "Ⅱ" : "▶");
+                assistantHandler.postDelayed(this, 500L);
+            }
+        }
+    };
+
     private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
     private String currentMediaUrl;
     private String currentReferer;
@@ -156,74 +179,119 @@ public class NativePlayerActivity extends Activity {
         playerView.setPlayer(player);
         root.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
-        // TV-friendly volume slider; the default controller has no dependable volume control.
-        android.widget.LinearLayout volumeBar = new android.widget.LinearLayout(this);
-        volumeBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        volumeBar.setGravity(Gravity.CENTER_VERTICAL);
-        volumeBar.setPadding(dp(10), dp(6), dp(10), dp(6));
-        volumeBar.setBackgroundColor(0x99000000);
-        FrameLayout.LayoutParams volumeParams = new FrameLayout.LayoutParams(dp(300), dp(52), Gravity.BOTTOM | Gravity.START);
-        volumeParams.setMargins(dp(18), 0, 0, dp(22));
-        root.addView(volumeBar, volumeParams);
-        volumeButton = new Button(this);
-        volumeButton.setText("🔊");
-        volumeButton.setContentDescription("Выключить звук");
-        volumeButton.setFocusable(true);
-        volumeButton.setMinWidth(dp(52));
-        volumeButton.setOnClickListener(v -> {
-            if (player == null) return;
-            if (player.getVolume() > 0.001f) {
-                volumeBeforeMute = player.getVolume(); player.setVolume(0f);
-                volumeButton.setText("🔇"); volumeButton.setContentDescription("Включить звук");
-                if (volumeSeekBar != null) volumeSeekBar.setProgress(0);
-            } else {
-                float restored = volumeBeforeMute > 0.001f ? volumeBeforeMute : 1.0f;
-                player.setVolume(restored); volumeButton.setText("🔊");
-                volumeButton.setContentDescription("Выключить звук");
-                if (volumeSeekBar != null) volumeSeekBar.setProgress(Math.round(restored * 100f));
-            }
-        });
-        volumeBar.addView(volumeButton, new android.widget.LinearLayout.LayoutParams(dp(58), dp(44)));
-        volumeSeekBar = new android.widget.SeekBar(this);
-        volumeSeekBar.setMax(100); volumeSeekBar.setProgress(100);
-        volumeSeekBar.setContentDescription("Громкость"); volumeSeekBar.setFocusable(true);
-        volumeSeekBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
-                if (!fromUser || player == null) return;
-                float value = Math.max(0, Math.min(100, progress)) / 100f; player.setVolume(value);
-                if (value > 0.001f) { volumeBeforeMute = value; volumeButton.setText("🔊"); volumeButton.setContentDescription("Выключить звук"); }
-                else { volumeButton.setText("🔇"); volumeButton.setContentDescription("Включить звук"); }
-            }
-            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { }
-            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) { }
-        });
-        android.widget.LinearLayout.LayoutParams seekParams = new android.widget.LinearLayout.LayoutParams(0, dp(42), 1f);
-        seekParams.leftMargin = dp(8); volumeBar.addView(volumeSeekBar, seekParams);
 
-        android.widget.LinearLayout selectorBar = new android.widget.LinearLayout(this);
-        selectorBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        selectorBar.setGravity(Gravity.END);
-        FrameLayout.LayoutParams barParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.TOP | Gravity.END);
-        int margin = dp(18);
-        barParams.setMargins(margin, margin, margin, margin);
-        root.addView(selectorBar, barParams);
+        playerView.setUseController(false);
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setClickable(false);
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+
+        android.widget.LinearLayout top = new android.widget.LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(dp(22), dp(10), dp(22), dp(10));
+        top.setBackgroundColor(0x55000000);
+        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, dp(54), Gravity.TOP);
+        overlay.addView(top, topParams);
+        android.widget.TextView title = new android.widget.TextView(this);
+        title.setText("RuFilmTV");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(16);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.TextView menu = controlText("⋮", 30);
+        top.addView(menu, new android.widget.LinearLayout.LayoutParams(dp(48), dp(46)));
+        menu.setOnClickListener(v -> showAssistantMenu());
+
+        assistantControls = new android.widget.LinearLayout(this);
+        assistantControls.setOrientation(android.widget.LinearLayout.VERTICAL);
+        assistantControls.setPadding(dp(18), dp(8), dp(18), dp(12));
+        assistantControls.setBackgroundColor(0x55000000);
+        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(-1, dp(124), Gravity.BOTTOM);
+        overlay.addView(assistantControls, bottomParams);
+
+        android.widget.LinearLayout timelineRow = new android.widget.LinearLayout(this);
+        timelineRow.setGravity(Gravity.CENTER_VERTICAL);
+        assistantControls.addView(timelineRow, new android.widget.LinearLayout.LayoutParams(-1, dp(34)));
+        currentTimeText = controlText("0:00", 11);
+        timelineRow.addView(currentTimeText, new android.widget.LinearLayout.LayoutParams(dp(48), -2));
+        timelineSeek = new android.widget.SeekBar(this);
+        timelineSeek.setMax(1000);
+        timelineSeek.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffa78bfa));
+        timelineSeek.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffb49aff));
+        timelineSeek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x99ffffff));
+        timelineSeek.setPadding(dp(4), 0, dp(4), 0);
+        timelineSeek.setFocusable(true);
+        timelineRow.addView(timelineSeek, new android.widget.LinearLayout.LayoutParams(0, dp(32), 1f));
+        durationTimeText = controlText("0:00", 11);
+        durationTimeText.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        timelineRow.addView(durationTimeText, new android.widget.LinearLayout.LayoutParams(dp(48), -2));
+        timelineSeek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && player != null) {
+                    long duration = player.getDuration();
+                    if (duration > 0 && duration != C.TIME_UNSET) currentTimeText.setText(formatTime(duration * progress / 1000L));
+                }
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { showAssistantControls(); }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {
+                if (player != null) {
+                    long duration = player.getDuration();
+                    if (duration > 0 && duration != C.TIME_UNSET) player.seekTo(duration * seekBar.getProgress() / 1000L);
+                }
+                scheduleAssistantHide();
+            }
+        });
+
+        android.widget.FrameLayout controlRow = new android.widget.FrameLayout(this);
+        assistantControls.addView(controlRow, new android.widget.LinearLayout.LayoutParams(-1, dp(62)));
+        android.widget.TextView lock = controlText("▣", 22);
+        lockButton = lock;
+        android.widget.FrameLayout.LayoutParams lockParams = new android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        controlRow.addView(lock, lockParams);
+        lock.setOnClickListener(v -> {
+            controlsLocked = !controlsLocked;
+            lockButton.setText(controlsLocked ? "▣" : "♙");
+            showAssistantControls();
+        });
+
+        android.widget.LinearLayout transport = new android.widget.LinearLayout(this);
+        transport.setGravity(Gravity.CENTER);
+        android.widget.FrameLayout.LayoutParams transportParams = new android.widget.FrameLayout.LayoutParams(-2, -1, Gravity.CENTER);
+        controlRow.addView(transport, transportParams);
+        android.widget.TextView back = controlText("↶10", 17);
+        transport.addView(back, new android.widget.LinearLayout.LayoutParams(dp(58), dp(54)));
+        back.setOnClickListener(v -> { if (player != null) player.seekTo(Math.max(0L, player.getCurrentPosition()-10000L)); showAssistantControls(); });
+        playPauseButton = controlText("Ⅱ", 29);
+        transport.addView(playPauseButton, new android.widget.LinearLayout.LayoutParams(dp(68), dp(54)));
+        playPauseButton.setOnClickListener(v -> { if (player != null) { if (player.isPlaying()) player.pause(); else player.play(); } showAssistantControls(); });
+        android.widget.TextView forward = controlText("10↷", 17);
+        transport.addView(forward, new android.widget.LinearLayout.LayoutParams(dp(58), dp(54)));
+        forward.setOnClickListener(v -> { if (player != null) player.seekTo(Math.min(player.getDuration(), player.getCurrentPosition()+10000L)); showAssistantControls(); });
+
+        displayButton = controlText("⛶", 23);
+        android.widget.FrameLayout.LayoutParams displayParams = new android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        controlRow.addView(displayButton, displayParams);
+        displayButton.setOnClickListener(v -> {
+            if (playerView != null) {
+                int mode = playerView.getResizeMode();
+                playerView.setResizeMode(mode == AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM : AspectRatioFrameLayout.RESIZE_MODE_FIT);
+            }
+            showAssistantControls();
+        });
+
+        overlay.setOnClickListener(v -> {
+            if (controlsLocked) return;
+            if (controlsVisible) hideAssistantControls(); else showAssistantControls();
+        });
+        root.setOnClickListener(v -> {
+            if (controlsLocked) return;
+            if (controlsVisible) hideAssistantControls(); else showAssistantControls();
+        });
+
+        // Keep the season/episode and quality actions available from the top-right menu.
         seasonButton = new Button(this);
-        seasonButton.setText("Сезон ▾");
-        seasonButton.setFocusable(true);
-        seasonButton.setOnClickListener(v -> showEpisodeSelector(0));
-        selectorBar.addView(seasonButton);
         episodeButton = new Button(this);
-        episodeButton.setText("Серия ▾");
-        episodeButton.setFocusable(true);
-        episodeButton.setOnClickListener(v -> showEpisodeSelector(1));
-        selectorBar.addView(episodeButton);
         qualityButton = new Button(this);
-        qualityButton.setText("Качество ▾");
-        qualityButton.setFocusable(true);
-        qualityButton.setOnClickListener(v -> showQualityDialog());
-        selectorBar.addView(qualityButton);
         try {
             String selectors = getIntent().getStringExtra(EXTRA_EPISODE_SELECTORS);
             if (selectors != null) episodeSelectors = new org.json.JSONArray(selectors);
@@ -262,7 +330,7 @@ public class NativePlayerActivity extends Activity {
         });
         player.prepare();
         player.play();
-        syncHandler.postDelayed(syncRunnable, 1200L);
+        syncHandler.postDelayed(syncRunnable, 1200L);\n        assistantHandler.post(updateTimeline);\n        scheduleAssistantHide();
     }
 
     private void updateEpisodeButtonLabels() {
@@ -476,12 +544,58 @@ public class NativePlayerActivity extends Activity {
             .show();
     }
 
+
+    private android.widget.TextView controlText(String value, int size) {
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(value);
+        t.setTextColor(android.graphics.Color.WHITE);
+        t.setTextSize(size);
+        t.setGravity(Gravity.CENTER);
+        t.setFocusable(true);
+        t.setBackground(android.graphics.drawable.RippleDrawable.createFromXmlInner(
+            getResources(), android.util.Xml.newPullParser(), null));
+        return t;
+    }
+    private String formatTime(long ms) {
+        long total = Math.max(0L, ms / 1000L);
+        long h = total / 3600L, m = (total % 3600L) / 60L, sec = total % 60L;
+        return h > 0 ? String.format(Locale.ROOT, "%d:%02d:%02d", h, m, sec)
+            : String.format(Locale.ROOT, "%d:%02d", m, sec);
+    }
+    private void showAssistantMenu() {
+        String[] items = {"Выбрать сезон", "Выбрать серию", "Качество видео", "Скрыть панель"};
+        new AlertDialog.Builder(this).setItems(items, (d, which) -> {
+            if (which == 0) showEpisodeSelector(0);
+            else if (which == 1) showEpisodeSelector(1);
+            else if (which == 2) showQualityDialog();
+            else hideAssistantControls();
+        }).show();
+        showAssistantControls();
+    }
+    private void showAssistantControls() {
+        if (assistantControls == null) return;
+        controlsVisible = true;
+        assistantControls.setVisibility(View.VISIBLE);
+        scheduleAssistantHide();
+    }
+    private void hideAssistantControls() {
+        if (assistantControls == null || controlsLocked) return;
+        controlsVisible = false;
+        assistantControls.setVisibility(View.GONE);
+    }
+    private void scheduleAssistantHide() {
+        assistantHandler.removeCallbacks(hideAssistantRunnable);
+        assistantHandler.postDelayed(hideAssistantRunnable, 4500L);
+    }
+    private final Runnable hideAssistantRunnable = () -> {
+        if (!controlsLocked && player != null && player.isPlaying()) hideAssistantControls();
+    };
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
 
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
     @Override protected void onDestroy() { releasePlayer(); super.onDestroy(); }
     private void releasePlayer() {
-        syncHandler.removeCallbacks(syncRunnable);
+        syncHandler.removeCallbacks(syncRunnable);\n        assistantHandler.removeCallbacks(updateTimeline);\n        assistantHandler.removeCallbacks(hideAssistantRunnable);
         if (player != null) {
             MainActivity.syncOriginalPlayback(player.getCurrentPosition(), false);
             if (playerView != null) playerView.setPlayer(null);
