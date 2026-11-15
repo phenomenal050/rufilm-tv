@@ -529,7 +529,21 @@ fullscreen_methods = r"""
     }
 """
 if "private void addFullscreenControls()" not in s:
-    anchor = "    private void hideCustomView(){"
+    anchor = "    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (customView != null && event != null && Build.VERSION.SDK_INT >= 24 &&
+                (event.getAction() == MotionEvent.ACTION_HOVER_ENTER ||
+                 event.getAction() == MotionEvent.ACTION_HOVER_MOVE ||
+                 event.getAction() == MotionEvent.ACTION_HOVER_EXIT)) {
+            PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
+            View decor = getWindow().getDecorView();
+            decor.setPointerIcon(arrow);
+            if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
+            if (customView != null) customView.setPointerIcon(arrow);
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    private void hideCustomView(){"
     if anchor not in s:
         raise SystemExit("fullscreen methods anchor missing")
     s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
@@ -557,7 +571,7 @@ s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,
     private final String[] themeNames = {"Красный","Фиолетовый","Синий","Голубой","Бирюзовый","Зелёный","Лайм","Оранжевый","Розовый","Золотой"};
     private final int[] themeColors = {0xffd73445,0xff9b6bdb,0xff3978e8,0xff20a6d8,0xff16a6a0,0xff35a866,0xff91b832,0xffe88732,0xffdc669e,0xffc49a42};''')
 s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
-s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ КИНОТЕАТР",9,0xffff7b86,true)')
+s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
 s = s.replace('playerMode = prefs.getString("player_mode", "native");',
 '''playerMode = prefs.getString("player_mode", "native");
         selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
@@ -589,10 +603,18 @@ methods = r"""
         if (themeButton != null) themeButton.setBackground(shape(accent, 13));
         if (web != null && updateWeb) {
             String a = String.format(Locale.US, "#%06X", (0xFFFFFF & accent));
-            String js = "(function(){var id='rufilm-theme-colors',st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}" +
-                "var a='" + a + "';st.textContent='a{color:'+a+'!important;}a:focus,button:focus,input:focus,select:focus,[tabindex]:focus{outline-color:'+a+'!important;}' +" +
-                "button,input[type=submit],input[type=button],.active,.current,.pagination .active{background:'+a+'!important;border-color:'+a+'!important;}' +" +
-                ".shortstory,.short-story,.movie-item,.film-item,.serial-item,.item,.post,.news-item,.story,.content-item,.movie,.film,.serial,.card{border-color:'+a+'55!important;}';})();";
+            String js = "(function(){var id='rufilm-theme-colors',accent='" + a + "';" +
+                "function install(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(id);if(!st){st=d.createElement('style');st.id=id;(d.head||d.documentElement).appendChild(st);}" +
+                "st.textContent=':root{--rf-accent:'+accent+'!important;--rf-red:'+accent+'!important;--primary:'+accent+'!important;--accent:'+accent+'!important;color-scheme:dark;}' +" +
+                "a,a:visited,.link,.pagination a,.pages a,.navigation a,.pagi a,.description a,.entry-content a{color:'+accent+'!important;}' +" +
+                "a:focus,button:focus,input:focus,select:focus,textarea:focus,[tabindex]:focus{outline:3px solid '+accent+'!important;outline-offset:2px!important;}' +" +
+                "button,input[type=submit],input[type=button],.active,.current,.pagination .active,.pages .active,.selected,.is-active,[aria-current=true]{background:'+accent+'!important;border-color:'+accent+'!important;color:#fff!important;}' +" +
+                "input[type=checkbox],input[type=radio],progress{accent-color:'+accent+'!important;}' +" +
+                "::selection{background:'+accent+'!important;color:#fff!important;}' +" +
+                "article,.shortstory,.short-story,.movie-item,.film-item,.serial-item,.item,.post,.news-item,.story,.content-item,.movie,.film,.serial,.card{border-color:'+accent+'66!important;}' +" +
+                ".progress,.progress-bar,.video-js .vjs-play-progress,.plyr__progress__played{background-color:'+accent+'!important;}';}catch(e){}}" +
+                "install(document);function scan(){var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{install(fs[i].contentDocument);}catch(e){}if(!fs[i].__rufilmThemeBound){fs[i].__rufilmThemeBound=true;fs[i].addEventListener('load',function(){try{install(this.contentDocument);}catch(e){}});}}}" +
+                "scan();if(!window.__rufilmThemeObserver){window.__rufilmThemeObserver=new MutationObserver(scan);window.__rufilmThemeObserver.observe(document.documentElement,{childList:true,subtree:true});}})();";
             web.evaluateJavascript(js, null);
         }
         updateTabs();
@@ -615,6 +637,10 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
                     });
                 }
                 fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
+
+# Keep the Android mouse cursor available while the WebView custom view is fullscreen.
+s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);',
+              'decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);')
 
 # Persist all edits, including the native-player bridge appended above.
 p.write_text(s, encoding="utf-8")
