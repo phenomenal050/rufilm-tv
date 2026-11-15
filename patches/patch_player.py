@@ -289,6 +289,20 @@ if 'rufilmActiveInstance = this;' not in s:
         raise SystemExit('Could not find onCreate for activity reference')
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
 
+# Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
+web_ctor = re.search(r'(\\bweb\\s*=\\s*new\\s+WebView\\s*\\([^;]*\\);)', s)
+if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
+    setup = '''
+        android.webkit.CookieManager.getInstance().setAcceptCookie(true);
+        if (android.os.Build.VERSION.SDK_INT >= 21)
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+        try {
+            String ua = web.getSettings().getUserAgentString();
+            if (ua != null) web.getSettings().setUserAgentString(ua.replace("; wv", "").replace("Version/4.0 ", ""));
+        } catch (Exception ignored) { }
+'''
+    s = s[:web_ctor.end()] + setup + s[web_ctor.end():]
+
 # Release the launch guard when returning from NativePlayerActivity.
 # MainActivity receives onResume after the native player is closed.
 resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s)
