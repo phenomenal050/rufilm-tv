@@ -467,9 +467,10 @@ fullscreen_methods = r"""
             "var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),near].join(' ').toLowerCase();" +
             "var opts=[].map.call(x.options,function(o){return {text:(o.textContent||'').trim(),value:o.value};});var words=opts.map(function(o){return o.text;}).join(' ').toLowerCase();" +
             "var season=/season|сезон/.test(meta+' '+words),episode=/episode|серия|эпизод/.test(meta+' '+words);" +
-            "all.push({frameIndex:ids[k],index:i,kind:season?'season':(episode?'episode':'other'),selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts,score:(season||episode?100:0)+(/player|video|serial|series|плеер|сериал/.test(meta)?30:0)});});});" +
+            "all.push({frameIndex:ids[k],index:i,kind:season?'season':(episode?'episode':'other'),meta:meta,words:words,selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts,score:(season||episode?100:0)+(/player|video|serial|series|плеер|сериал/.test(meta)?30:0)});});});" +
             "var ss=all.filter(function(x){return x.kind==='season'}).sort(function(a,b){return b.score-a.score;});var ee=all.filter(function(x){return x.kind==='episode'}).sort(function(a,b){return b.score-a.score;});" +
-            "if((!ss.length||!ee.length)&&all.length===2){if(!ss.length)ss=[all[0]];if(!ee.length)ee=[all[1]];}" +
+            "if(!ss.length||!ee.length){var rest=all.filter(function(x){return x!== (ss.length?ss[0]:null) && !/quality|качество|разрешение|озвучка|субтитр|не требуется/.test((x.meta||'')+' '+(x.words||''));}).sort(function(a,b){return b.score-a.score;});" +
+            "if(!ss.length&&rest.length)ss=[rest.shift()];if(!ee.length&&rest.length)ee=[rest.shift()];}" +
             "return JSON.stringify({season:ss.length?ss[0]:null,episode:ee.length?ee[0]:null});})()";
         web.evaluateJavascript(js, value -> {
             try {
