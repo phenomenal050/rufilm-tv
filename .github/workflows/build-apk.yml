@@ -1,5 +1,5 @@
 name: Build RuFilmTV 3.0.0 APK
-# Retry build: 2026-11-15
+# Build workflow
 
 on:
   workflow_dispatch:
@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@v4
       - name: Extract RuFilmTV 3.0.0 project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
       - name: Export base MainActivity source for inspection
@@ -42,16 +43,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - uses: actions/checkout@v4
-      - name: Export base MainActivity source for inspection
-        run: |
-          cp rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java "$RUNNER_TEMP/MainActivity.java"
-      - name: Upload base source for inspection
-        uses: actions/upload-artifact@v4
-        with:
-          name: RuFilmTV-source-inspection
-          path: ${{ runner.temp }}/MainActivity.java
-          if-no-files-found: error
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
