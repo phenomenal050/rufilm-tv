@@ -569,18 +569,29 @@ fullscreen_methods = r"""
     }
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        boolean handled = super.dispatchGenericMotionEvent(event);
         if (customView != null && event != null) {
-            int action=event.getAction();
-            if(action==MotionEvent.ACTION_HOVER_ENTER || action==MotionEvent.ACTION_HOVER_MOVE || action==MotionEvent.ACTION_SCROLL) {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_SCROLL) {
                 revealSystemCursor();
                 showFullscreenUi();
-                installFullscreenCursor(customView);
-                installFullscreenCursor(fullscreenContainer);
-                installFullscreenCursor(web);
-                installFullscreenCursor(getWindow().getDecorView());
+                PointerIcon arrow = Build.VERSION.SDK_INT >= 24 ? PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW) : null;
+                if (Build.VERSION.SDK_INT >= 24 && arrow != null) {
+                    getWindow().getDecorView().setPointerIcon(arrow);
+                    if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
+                    if (customView != null) customView.setPointerIcon(arrow);
+                    if (web != null) web.setPointerIcon(arrow);
+                    if (event.getAction() == MotionEvent.ACTION_HOVER_MOVE) {
+                        customView.post(() -> {
+                            if (customView != null) customView.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+                            if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+                            getWindow().getDecorView().setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+                        });
+                    }
+                }
             }
         }
-        return super.dispatchGenericMotionEvent(event);
+        return handled;
     }
 """
 if "private void addFullscreenControls()" not in s:
