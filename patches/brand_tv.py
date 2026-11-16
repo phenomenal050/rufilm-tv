@@ -42,33 +42,13 @@ colors.write_text(old,encoding="utf-8")
 night=res/"values-night/colors.xml";night.parent.mkdir(parents=True,exist_ok=True)
 night.write_text('<resources><color name="rufilm_icon_background_night">#171719</color></resources>',encoding="utf-8")
 
-# Full-bleed 16:9 Android TV banner: same play mark and wordmark, composed horizontally.
-def banner_svg(dark_mode):
-    bg1,bg2,main,sub=("#29292c","#101012","#f5f2ed","#eee9e0") if dark_mode else ("#fff0d9","#e8cfad","#171719","#27221c")
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
-    <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="{bg1}"/><stop offset="1" stop-color="{bg2}"/></linearGradient>
-    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff795c"/><stop offset=".42" stop-color="#ff302d"/><stop offset="1" stop-color="#d90017"/></linearGradient>
-    <linearGradient id="cream" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1dc"/><stop offset="1" stop-color="#d9b98e"/></linearGradient></defs>
-    <rect width="960" height="540" rx="76" fill="url(#bg)"/>
-    <path d="M155 92 C137 78 112 94 112 122 L112 416 C112 451 141 469 171 449 L350 325 L350 213 Z" fill="url(#cream)"/>
-    <path d="M158 78 C181 64 207 73 235 91 L485 235 C531 262 531 310 485 337 L235 481 C201 501 166 481 166 444 L166 382 L335 286 L179 197 C145 178 135 101 158 78 Z" fill="url(#red)"/>
-    <path d="M166 382 L335 286 L166 190 Z" fill="{bg2}"/>
-    <path d="M158 78 C181 64 207 73 235 91 L260 105 C217 83 181 95 181 133 L181 430 C181 454 174 470 158 475 C140 466 126 451 126 418 L126 128 C126 105 139 88 158 78 Z" fill="url(#cream)" opacity=".62"/>
-    <text x="570" y="257" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="100" font-weight="700" letter-spacing="-5" fill="{main}">RUFILM <tspan fill="#f22b31">TV</tspan></text>
-    <text x="575" y="340" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="39" font-weight="500" letter-spacing="5" fill="{sub}">ТВОЙ ОНЛАЙН</text>
-    <text x="575" y="395" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="39" font-weight="500" letter-spacing="5" fill="{sub}">КИНОТЕАТР</text></svg>'''
-
-for suffix,is_dark in [("",False),("-night",True)]:
-    tmp=Path("/tmp")/("rufilm_banner_dark.svg" if is_dark else "rufilm_banner_light.svg")
-    png=Path("/tmp")/("rufilm_banner_dark.png" if is_dark else "rufilm_banner_light.png")
-    tmp.write_text(banner_svg(is_dark),encoding="utf-8")
-    cairosvg.svg2png(url=str(tmp),write_to=str(png),output_width=960,output_height=540)
-    art=Image.open(png).convert("RGBA").resize((960,540),Image.Resampling.LANCZOS)
-    mask=Image.new("L",(960,540),0);ImageDraw.Draw(mask).rounded_rectangle((0,0,959,539),radius=76,fill=255)
-    art.putalpha(mask)
-    folder=res/("drawable-night-nodpi" if is_dark else "drawable-nodpi")
-    folder.mkdir(parents=True,exist_ok=True)
-    art.resize((320,180),Image.Resampling.LANCZOS).save(folder/"rufilm_tv_banner.png")
+# Install the exact selected Android TV banners; do not redraw or alter the play logo.
+import shutil
+for suffix, filename in [("", "rufilm_tv_banner_light.webp"),
+                          ("-night", "rufilm_tv_banner_dark.webp")]:
+    folder = res / ("drawable-night-nodpi" if suffix else "drawable-nodpi")
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(Path("patches") / filename, folder / "rufilm_tv_banner.webp")
 
 # Manifest launcher metadata
 import xml.etree.ElementTree as ET
