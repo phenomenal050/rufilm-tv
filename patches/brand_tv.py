@@ -25,16 +25,16 @@ light_svg = light_svg.replace('fill="#eee9e0"', 'fill="#27221c"')
 light_icon = render_icon(light_svg, "rufilm_light.svg")
 
 for density, size in [("mdpi",48),("hdpi",72),("xhdpi",96),("xxhdpi",144),("xxxhdpi",192)]:
-    for theme, artwork in [("", dark_icon), ("-night", light_icon)]:
-        target = res / f"mipmap-{density}{theme}" / "ic_launcher.png"
+    for theme, artwork in [("", light_icon), ("-night", dark_icon)]:
+        target = res / (f"mipmap-night-{density}" if theme == "-night" else f"mipmap-{density}") / "ic_launcher.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         artwork.resize((size,size), Image.Resampling.LANCZOS).save(target)
 
 # Android 8+ adaptive launcher resources; -night selects the beige artwork
 # whenever Android reports that the device is in light appearance.
 for theme, artwork, foreground_name, background in [
-    ("", dark_icon, "ic_launcher_foreground", "#171719"),
-    ("-night", light_icon, "ic_launcher_foreground_light", "#f5e3c9"),
+    ("", light_icon, "ic_launcher_foreground", "#f5e3c9"),
+    ("-night", dark_icon, "ic_launcher_foreground_dark", "#171719"),
 ]:
     adaptive_dir = res / (f"mipmap-night-anydpi-v26" if theme == "-night" else "mipmap-anydpi-v26")
     adaptive_dir.mkdir(parents=True, exist_ok=True)
@@ -51,16 +51,16 @@ colors.parent.mkdir(parents=True, exist_ok=True)
 if colors.exists():
     c = colors.read_text(encoding="utf-8")
     if "rufilm_icon_background" not in c:
-        c = c.replace("</resources>", '    <color name="rufilm_icon_background">#171719</color>\n</resources>')
+        c = c.replace("</resources>", '    <color name="rufilm_icon_background">#f5e3c9</color>\n</resources>')
 else:
-    c = '<resources><color name="rufilm_icon_background">#171719</color></resources>'
+    c = '<resources><color name="rufilm_icon_background">#f5e3c9</color></resources>'
 colors.write_text(c, encoding="utf-8")
 
 night_colors = res / "values-night" / "colors.xml"
 night_colors.parent.mkdir(parents=True, exist_ok=True)
-night_colors.write_text('<resources><color name="rufilm_icon_background_night">#f5e3c9</color></resources>', encoding="utf-8")
+night_colors.write_text('<resources><color name="rufilm_icon_background_night">#171719</color></resources>', encoding="utf-8")
 # Android TV / Google TV banners follow the same system appearance.
-for theme, artwork, bg in [("", dark_icon, (17,17,19)), ("-night", light_icon, (245,227,201))]:
+for theme, artwork, bg in [("", light_icon, (245,227,201)), ("-night", dark_icon, (17,17,19))]:
     banner = Image.new("RGB",(320,180),bg)
     logo_size = 176
     logo = artwork.resize((logo_size,logo_size),Image.Resampling.LANCZOS)
