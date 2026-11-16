@@ -349,6 +349,21 @@ fullscreen_fields = r"""
     private android.widget.SeekBar fullscreenVolumeSeek;
     private org.json.JSONObject fullscreenSeasonData, fullscreenEpisodeData;
     private final android.os.Handler fullscreenUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable hideSystemCursor = () -> setSystemCursorVisible(false);
+    private void setSystemCursorVisible(boolean visible) {
+        if (Build.VERSION.SDK_INT < 24 || customView == null) return;
+        PointerIcon icon = PointerIcon.getSystemIcon(this,
+            visible ? PointerIcon.TYPE_ARROW : PointerIcon.TYPE_NULL);
+        getWindow().getDecorView().setPointerIcon(icon);
+        if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(icon);
+        if (customView != null) customView.setPointerIcon(icon);
+    }
+    private void revealSystemCursor() {
+        if (Build.VERSION.SDK_INT < 24 || customView == null) return;
+        fullscreenUiHandler.removeCallbacks(hideSystemCursor);
+        setSystemCursorVisible(true);
+        fullscreenUiHandler.postDelayed(hideSystemCursor, 5000L);
+    }
     private final Runnable hideFullscreenUi = () -> {
         if (fullscreenControls != null) fullscreenControls.animate().alpha(0f).setDuration(220L).withEndAction(() -> {
             if (fullscreenControls != null && fullscreenControls.getAlpha() < 0.1f) fullscreenControls.setVisibility(View.GONE);
@@ -546,15 +561,8 @@ fullscreen_methods = r"""
             int action = event.getAction();
             if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE ||
                     action == MotionEvent.ACTION_SCROLL) {
+                revealSystemCursor();
                 showFullscreenUi();
-            }
-            if (Build.VERSION.SDK_INT >= 24 && (action == MotionEvent.ACTION_HOVER_ENTER ||
-                    action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_HOVER_EXIT)) {
-                PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
-                getWindow().getDecorView().setPointerIcon(arrow);
-                if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
-                if (fullscreenControls != null) fullscreenControls.setPointerIcon(arrow);
-                if (customView != null) customView.setPointerIcon(arrow);
             }
         }
         return super.dispatchGenericMotionEvent(event);
@@ -570,7 +578,9 @@ view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,
 if view_anchor in s and "addFullscreenControls();" not in s:
     s = s.replace(view_anchor, view_anchor + "\n                addFullscreenControls();", 1)
 
-hide_anchor = "if(customView==null)return;"
+hide_anchor = "if(customView==null)return;";
+if "fullscreenUiHandler.removeCallbacks(hideSystemCursor);" not in s:
+    s = s.replace(hide_anchor, hide_anchor + "\\n        fullscreenUiHandler.removeCallbacks(hideSystemCursor);", 1)
 if hide_anchor in s and "fullscreenUiHandler.removeCallbacks(hideFullscreenUi);" not in s:
     s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1)
 
