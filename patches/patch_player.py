@@ -662,6 +662,22 @@ s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYS
               'decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);')
 
 # Persist all edits, including the native-player bridge appended above.
+# Requested cleanup: preserve the current player, remove redundant season/episode and volume overlay.
+s = s.replace('fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();', 'fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));')
+# Hide bottom navigation only on film/series detail pages that actually contain a player.
+s = s.replace('private View rootLayout, customView;', 'private View rootLayout, customView, bottomNav;')
+s = s.replace('root.addView(nav);setContentView(root);updateTabs();', 'bottomNav=nav;root.addView(nav);setContentView(root);updateTabs();')
+s = s.replace('pageTitle.setText(titleFor(url));\n                view.evaluateJavascript(skin, ignored -> {', 'pageTitle.setText(titleFor(url));\n                updateBottomNavForPage(url);\n                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> updateBottomNavForPage(url), 1000L);\n                view.evaluateJavascript(skin, ignored -> {')
+s = s.replace('pageTitle.setText(titleFor(url));\n                firstPageReady = true;', 'pageTitle.setText(titleFor(url));\n                if (bottomNav != null) bottomNav.setVisibility(View.VISIBLE);\n                firstPageReady = true;')
+if 'private void updateBottomNavForPage(String url)' not in s:
+    nav_method = '''\n    private void updateBottomNavForPage(String url) {\n        if (bottomNav == null || web == null) return;\n        boolean detail = url != null && url.matches("(?i).*://[^/]+/(films?|serials?)/[^/?#]+.*");\n        if (!detail) { bottomNav.setVisibility(View.VISIBLE); return; }\n        web.evaluateJavascript("(function(){return !!document.querySelector('video, .player iframe, .video iframe, iframe[src*=player], iframe[src*=video], iframe[src*=embed]');})()", value -> {\n            if (bottomNav != null) bottomNav.setVisibility("true".equals(value) ? View.GONE : View.VISIBLE);\n        });\n    }\n'''
+    anchor = '    private String titleFor(String url){'
+    if anchor not in s: raise SystemExit('titleFor anchor missing')
+    s = s.replace(anchor, nav_method + anchor, 1)
+if 'web.setOverScrollMode(View.OVER_SCROLL_NEVER);' not in s:
+    s = s.replace('web.setLayerType(View.LAYER_TYPE_HARDWARE, null);', 'web.setLayerType(View.LAYER_TYPE_HARDWARE, null);\n        web.setOverScrollMode(View.OVER_SCROLL_NEVER);')
+if 'web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);' not in s:
+    s = s.replace('web.getSettings().setDomStorageEnabled(true);', 'web.getSettings().setDomStorageEnabled(true);\n        web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);\n        web.getSettings().setSupportZoom(false);\n        web.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);')
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
