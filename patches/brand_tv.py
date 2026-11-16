@@ -45,31 +45,45 @@ banner_dir = res / "drawable-nodpi"
 banner_dir.mkdir(parents=True,exist_ok=True)
 banner.save(banner_dir / "rufilm_tv_banner.png")
 
+# Update manifest using XML so the launcher metadata is reliable on Android TV and Google TV.
+import xml.etree.ElementTree as ET
 manifests = list(root.rglob("AndroidManifest.xml"))
 if not manifests:
     raise SystemExit("AndroidManifest.xml not found")
 manifest = manifests[0]
-xml = manifest.read_text(encoding="utf-8")
-app = re.search(r"<application\b[^>]*>", xml, re.S)
-if not app:
-    raise SystemExit("application tag not found")
-tag = app.group(0)
-def attr(text, name, value):
-    pattern = rf'\s+android:{name}="[^"]*"'
-    if re.search(pattern,text):
-        return re.sub(pattern, f' android:{name}="{value}"', text, count=1)
-    return text[:-1] + f' android:{name}="{value}">'
-tag = attr(tag,"icon","@mipmap/ic_launcher")
-tag = attr(tag,"banner","@drawable/rufilm_tv_banner")
-tag = attr(tag,"label","RUFILM TV")
-xml = xml[:app.start()] + tag + xml[app.end():]
-if "android.intent.category.LEANBACK_LAUNCHER" not in xml:
-    pattern = r'(<intent-filter\b[^>]*>(?:(?!</intent-filter>).)*?<action android:name="android.intent.action.MAIN"\s*/>(?:(?!</intent-filter>).)*?<category android:name="android.intent.category.LAUNCHER"\s*/>(?:(?!</intent-filter>).)*?</intent-filter>)'
-    m = re.search(pattern,xml,re.S)
-    if m:
-        block = m.group(1).replace("</intent-filter>",'    <category android:name="android.intent.category.LEANBACK_LAUNCHER" />\n        </intent-filter>')
-        xml = xml[:m.start()] + block + xml[m.end():]
-if "android.software.leanback" not in xml:
-    xml = xml.replace("<application", '<uses-feature android:name="android.software.leanback" android:required="false" />\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />\n    <application', 1)
-manifest.write_text(xml,encoding="utf-8")
+ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+ET.register_namespace("tools", "http://schemas.android.com/tools")
+tree = ET.parse(manifest)
+root_xml = tree.getroot()
+android = "{http://schemas.android.com/apk/res/android}"
+app = root_xml.find("application")
+if app is None:
+    raise SystemExit("application element not found")
+app.set(android + "icon", "@mipmap/ic_launcher")
+app.set(android + "roundIcon", "@mipmap/ic_launcher")
+app.set(android + "banner", "@drawable/rufilm_tv_banner")
+app.set(android + "label", "RUFILM TV")
+leanback = False
+main_activity = None
+for component in list(app):
+    if component.tag not in ("activity", "activity-alias"):
+        continue
+    for intent in component.findall("intent-filter"):
+        actions = [x.get(android + "name") for x in intent.findall("action")]
+        categories = [x.get(android + "name") for x in intent.findall("category")]
+        if "android.intent.action.MAIN" in actions:
+            main_activity = component
+            if "android.intent.category.LEANBACK_LAUNCHER" not in categories:
+                ET.SubElement(intent, "category", {android + "name": "android.intent.category.LEANBACK_LAUNCHER"})
+            leanback = True
+if not leanback and main_activity is not None:
+    intent = ET.SubElement(main_activity, "intent-filter")
+    ET.SubElement(intent, "action", {android + "name": "android.intent.action.MAIN"})
+    ET.SubElement(intent, "category", {android + "name": "android.intent.category.LEANBACK_LAUNCHER"})
+features = {x.get(android + "name") for x in root_xml.findall("uses-feature")}
+if "android.software.leanback" not in features:
+    ET.SubElement(root_xml, "uses-feature", {android + "name": "android.software.leanback", android + "required": "false"})
+if "android.hardware.touchscreen" not in features:
+    ET.SubElement(root_xml, "uses-feature", {android + "name": "android.hardware.touchscreen", android + "required": "false"})
+tree.write(manifest, encoding="utf-8", xml_declaration=True)
 print("Branding and Android TV launcher assets installed.")
