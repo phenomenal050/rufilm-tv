@@ -31,16 +31,11 @@ if colors.exists():
 else:
     c = '<resources><color name="rufilm_icon_background">#171719</color></resources>'
 colors.write_text(c, encoding="utf-8")
+# Android TV / Google TV banner: the exact same launcher icon, centered, without extra lettering.
 banner = Image.new("RGB",(320,180),(17,17,19))
-d = ImageDraw.Draw(banner)
-logo = icon.resize((126,126),Image.Resampling.LANCZOS)
-banner.paste(logo,(15,27),logo)
-bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-regular = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-d.text((158,55),"RUFILM",font=ImageFont.truetype(bold,25),fill=(247,244,239))
-d.text((158,84),"TV",font=ImageFont.truetype(bold,25),fill=(242,43,49))
-d.text((158,126),"ТВОЙ ОНЛАЙН",font=ImageFont.truetype(regular,10),fill=(238,234,226))
-d.text((158,141),"КИНОТЕАТР",font=ImageFont.truetype(regular,10),fill=(238,234,226))
+logo_size = 176
+logo = icon.resize((logo_size,logo_size),Image.Resampling.LANCZOS)
+banner.paste(logo,((320-logo_size)//2,(180-logo_size)//2),logo)
 banner_dir = res / "drawable-nodpi"
 banner_dir.mkdir(parents=True,exist_ok=True)
 banner.save(banner_dir / "rufilm_tv_banner.png")
