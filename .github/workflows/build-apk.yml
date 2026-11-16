@@ -43,6 +43,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Install RuFilmTV branding and Android TV assets
+        run: |
+          python3 -m pip install --quiet pillow cairosvg
+          python3 patches/brand_tv.py
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
