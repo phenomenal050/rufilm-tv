@@ -344,6 +344,19 @@ if hook_start < 0 or hook_end < 0:
 s = s[:hook_start] + "    private void injectExternalPlayerHook(WebView view) { installEpisodeSelectorSupport(); }\n\n" + s[hook_end:]
 
 fullscreen_fields = r"""
+    // The fullscreen root keeps Android's normal mouse arrow visible over the HTML5 surface.
+    private final class CursorVisibleFrame extends FrameLayout {
+        CursorVisibleFrame(Context context) {
+            super(context);
+            if (Build.VERSION.SDK_INT >= 24)
+                setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+        }
+        @Override public PointerIcon onResolvePointerIcon(MotionEvent event, int pointerIndex) {
+            if (Build.VERSION.SDK_INT >= 24)
+                return PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW);
+            return null;
+        }
+    }
     private FrameLayout fullscreenControls;
     private Button fullscreenSeasonButton, fullscreenEpisodeButton, fullscreenMuteButton;
     private android.widget.SeekBar fullscreenVolumeSeek;
@@ -597,12 +610,19 @@ if "private void addFullscreenControls()" not in s:
         raise SystemExit("fullscreen methods anchor missing")
     s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
 
-# Preserve the original HTML5 player's own controls and keep a real Android mouse arrow.
+# Force the original WebChromeClient fullscreen container and its video surface to use a visible arrow.
+s = s.replace(
+    "fullscreenContainer=new FrameLayout(MainActivity.this);",
+    "fullscreenContainer=new CursorVisibleFrame(MainActivity.this);",
+    1
+)
 view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
 if view_anchor in s and "installFullscreenCursor(view);" not in s:
-    cursor_code = (view_anchor + "\n                installFullscreenCursor(view);"
-                   + "\n                installFullscreenCursor(fullscreenContainer);"
-                   + "\n                setSystemCursorVisible(true);")
+    nl = chr(10)
+    cursor_code = (view_anchor + nl
+                   + "                installFullscreenCursor(view);" + nl
+                   + "                installFullscreenCursor(fullscreenContainer);" + nl
+                   + "                setSystemCursorVisible(true);")
     s = s.replace(view_anchor, cursor_code, 1)
 
 hide_anchor = "if(customView==null)return;";
