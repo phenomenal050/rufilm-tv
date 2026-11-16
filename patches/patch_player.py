@@ -580,7 +580,7 @@ if view_anchor in s and "addFullscreenControls();" not in s:
 
 hide_anchor = "if(customView==null)return;";
 if "fullscreenUiHandler.removeCallbacks(hideSystemCursor);" not in s:
-    s = s.replace(hide_anchor, hide_anchor + "\\n        fullscreenUiHandler.removeCallbacks(hideSystemCursor);", 1)
+    s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideSystemCursor);", 1)
 if hide_anchor in s and "fullscreenUiHandler.removeCallbacks(hideFullscreenUi);" not in s:
     s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1)
 
