@@ -367,12 +367,25 @@ fullscreen_methods = r"""
         fullscreenControls.setVisibility(View.VISIBLE);
         fullscreenControls.animate().alpha(1f).setDuration(140L).start();
         fullscreenUiHandler.removeCallbacks(hideFullscreenUi);
-        fullscreenUiHandler.postDelayed(hideFullscreenUi, 4500L);
+        fullscreenUiHandler.postDelayed(hideFullscreenUi, 5000L);
     }
 
     private void addFullscreenControls() {
         if (fullscreenContainer == null || fullscreenControls != null) return;
         fullscreenControls = new FrameLayout(this);
+        fullscreenControls.setFocusable(false);
+        if (Build.VERSION.SDK_INT >= 24) {
+            fullscreenControls.setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW));
+            fullscreenControls.setOnHoverListener((v, event) -> {
+                int action = event.getAction();
+                if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
+                    v.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+                    showFullscreenUi();
+                }
+                return false;
+            });
+        }
+        // Let the original HTML5 video receive the click; use it only to reveal controls.
         fullscreenControls.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) showFullscreenUi();
             return false;
@@ -529,15 +542,20 @@ fullscreen_methods = r"""
     }
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (customView != null && event != null && Build.VERSION.SDK_INT >= 24 &&
-                (event.getAction() == MotionEvent.ACTION_HOVER_ENTER ||
-                 event.getAction() == MotionEvent.ACTION_HOVER_MOVE ||
-                 event.getAction() == MotionEvent.ACTION_HOVER_EXIT)) {
-            PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
-            View decor = getWindow().getDecorView();
-            decor.setPointerIcon(arrow);
-            if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
-            if (customView != null) customView.setPointerIcon(arrow);
+        if (customView != null && event != null) {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE ||
+                    action == MotionEvent.ACTION_SCROLL) {
+                showFullscreenUi();
+            }
+            if (Build.VERSION.SDK_INT >= 24 && (action == MotionEvent.ACTION_HOVER_ENTER ||
+                    action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_HOVER_EXIT)) {
+                PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
+                getWindow().getDecorView().setPointerIcon(arrow);
+                if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
+                if (fullscreenControls != null) fullscreenControls.setPointerIcon(arrow);
+                if (customView != null) customView.setPointerIcon(arrow);
+            }
         }
         return super.dispatchGenericMotionEvent(event);
     }
