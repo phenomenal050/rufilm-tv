@@ -349,20 +349,32 @@ fullscreen_fields = r"""
     private android.widget.SeekBar fullscreenVolumeSeek;
     private org.json.JSONObject fullscreenSeasonData, fullscreenEpisodeData;
     private final android.os.Handler fullscreenUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable hideSystemCursor = () -> setSystemCursorVisible(false);
+    // Never request TYPE_NULL: Android TV mouse pointers must remain visible over HTML5 video.
+    private final Runnable hideSystemCursor = () -> { };
     private void setSystemCursorVisible(boolean visible) {
         if (Build.VERSION.SDK_INT < 24 || customView == null) return;
-        PointerIcon icon = PointerIcon.getSystemIcon(this,
-            visible ? PointerIcon.TYPE_ARROW : PointerIcon.TYPE_NULL);
-        getWindow().getDecorView().setPointerIcon(icon);
-        if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(icon);
-        if (customView != null) customView.setPointerIcon(icon);
+        PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
+        getWindow().getDecorView().setPointerIcon(arrow);
+        if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
+        if (customView != null) customView.setPointerIcon(arrow);
+        if (web != null) web.setPointerIcon(arrow);
     }
     private void revealSystemCursor() {
         if (Build.VERSION.SDK_INT < 24 || customView == null) return;
         fullscreenUiHandler.removeCallbacks(hideSystemCursor);
         setSystemCursorVisible(true);
-        fullscreenUiHandler.postDelayed(hideSystemCursor, 5000L);
+    }
+    private void installFullscreenCursor(View target) {
+        if (target == null || Build.VERSION.SDK_INT < 24) return;
+        target.setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW));
+        target.setOnHoverListener((v, event) -> {
+            int action=event.getAction();
+            if (action==MotionEvent.ACTION_HOVER_ENTER || action==MotionEvent.ACTION_HOVER_MOVE || action==MotionEvent.ACTION_SCROLL) {
+                v.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+                revealSystemCursor();
+            }
+            return false;
+        });
     }
     private final Runnable hideFullscreenUi = () -> {
         if (fullscreenControls != null) fullscreenControls.animate().alpha(0f).setDuration(220L).withEndAction(() -> {
@@ -558,11 +570,14 @@ fullscreen_methods = r"""
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (customView != null && event != null) {
-            int action = event.getAction();
-            if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE ||
-                    action == MotionEvent.ACTION_SCROLL) {
+            int action=event.getAction();
+            if(action==MotionEvent.ACTION_HOVER_ENTER || action==MotionEvent.ACTION_HOVER_MOVE || action==MotionEvent.ACTION_SCROLL) {
                 revealSystemCursor();
                 showFullscreenUi();
+                installFullscreenCursor(customView);
+                installFullscreenCursor(fullscreenContainer);
+                installFullscreenCursor(web);
+                installFullscreenCursor(getWindow().getDecorView());
             }
         }
         return super.dispatchGenericMotionEvent(event);
@@ -574,6 +589,9 @@ if "private void addFullscreenControls()" not in s:
         raise SystemExit("fullscreen methods anchor missing")
     s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
 
+# Keep a visible system mouse pointer on the fullscreen video surface itself.
+player = player.replace("fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));",
+    "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                installFullscreenCursor(view);\n                installFullscreenCursor(fullscreenContainer);")
 view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
 if view_anchor in s and "addFullscreenControls();" not in s:
     s = s.replace(view_anchor, view_anchor + "\n                addFullscreenControls();", 1)
