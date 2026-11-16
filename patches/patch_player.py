@@ -726,6 +726,69 @@ if _nav:
     }"""
     s = s[:_nav.start()] + _nav_method + s[_nav.end():]
 
+
+# Reliable bottom navigation visibility: detect real player DOM on every completed page,
+# not only hard-coded /films/ and /serials/ URL patterns.
+import re as _nav_re
+_nav_method = r"""    private int videoNavCheckGeneration = 0;
+    private final android.os.Handler videoNavHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private void updateBottomNavForPage(String url) {
+        if (bottomNav == null || web == null) return;
+        int generation = ++videoNavCheckGeneration;
+        String path = "";
+        try { path = url == null ? "" : Uri.parse(url).getPath(); } catch (Exception ignored) {}
+        if (path.isEmpty() || "/".equals(path)) {
+            bottomNav.setVisibility(View.VISIBLE);
+            return;
+        }
+        checkVideoPageForNavigation(generation, 0);
+    }
+
+    private void checkVideoPageForNavigation(int generation, int attempt) {
+        if (generation != videoNavCheckGeneration || bottomNav == null || web == null) return;
+        String js = "(function(){try{" +
+            "var selectors='video,audio,iframe,object,embed,[class*=player i],[id*=player i],[class*=video i],[id*=video i],[data-player]';" +
+            "var nodes=document.querySelectorAll(selectors);" +
+            "for(var i=0;i<nodes.length;i++){var e=nodes[i],r=e.getBoundingClientRect(),st=getComputedStyle(e);" +
+            "if(r.width>100&&r.height>60&&st.display!=='none'&&st.visibility!=='hidden')return true;}" +
+            "return false;}catch(e){return false;}})()";
+        web.evaluateJavascript(js, value -> {
+            if (generation != videoNavCheckGeneration || bottomNav == null) return;
+            if ("true".equals(value)) {
+                bottomNav.setVisibility(View.GONE);
+            } else if (attempt < 24) {
+                videoNavHandler.postDelayed(() -> checkVideoPageForNavigation(generation, attempt + 1), 300L);
+            } else {
+                bottomNav.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+"""
+_nav_pattern = _nav_re.compile(r"    private void updateBottomNavForPage\(String url\) \{.*?\n    \}", _nav_re.S)
+if _nav_pattern.search(s):
+    s = _nav_pattern.sub(lambda m: _nav_method.rstrip(), s, count=1)
+else:
+    anchor = '    private String titleFor(String url){'
+    if anchor not in s: raise SystemExit("titleFor insertion anchor missing")
+    s = s.replace(anchor, _nav_method + "\n" + anchor, 1)
+
+# Run the detector after actual page load completes; this also catches delayed iframe players.
+if "MainActivity.this.updateBottomNavForPage(view.getUrl());" not in s:
+    s = s.replace(
+        "MainActivity.this.installEpisodeSelectorSupport();",
+        "MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.updateBottomNavForPage(view.getUrl());",
+        1
+    )
+# Remove the redundant fixed 1-second duplicate check that added needless UI work.
+s = s.replace(
+    "updateBottomNavForPage(url);\n                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> updateBottomNavForPage(url), 1000L);",
+    "updateBottomNavForPage(url);"
+)
+# Ensure WebView uses the normal HTTP cache and hardware rendering without forced reloads.
+s = s.replace("web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);",
+              "web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);")
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
