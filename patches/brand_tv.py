@@ -42,13 +42,17 @@ colors.write_text(old,encoding="utf-8")
 night=res/"values-night/colors.xml";night.parent.mkdir(parents=True,exist_ok=True)
 night.write_text('<resources><color name="rufilm_icon_background_night">#171719</color></resources>',encoding="utf-8")
 
-# Install the exact selected Android TV banners; do not redraw or alter the play logo.
-import shutil
-for suffix, filename in [("", "rufilm_tv_banner_light.webp"),
-                          ("-night", "rufilm_tv_banner_dark.webp")]:
+# Install the exact selected Android TV tiles; their artwork is not redrawn.
+import base64
+for suffix, asset_name in [("", "banner_light.b64"), ("-night", "banner_dark.b64")]:
     folder = res / ("drawable-night-nodpi" if suffix else "drawable-nodpi")
     folder.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(Path("patches") / filename, folder / "rufilm_tv_banner.webp")
+    stale_png = folder / "rufilm_tv_banner.png"
+    if stale_png.exists():
+        stale_png.unlink()
+    (folder / "rufilm_tv_banner.webp").write_bytes(
+        base64.b64decode((Path("patches") / asset_name).read_text(encoding="ascii").strip())
+    )
 
 # Manifest launcher metadata
 import xml.etree.ElementTree as ET
