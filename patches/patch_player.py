@@ -590,8 +590,8 @@ if "private void addFullscreenControls()" not in s:
     s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
 
 # Keep a visible system mouse pointer on the fullscreen video surface itself.
-player = player.replace("fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));",
-    "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                installFullscreenCursor(view);\n                installFullscreenCursor(fullscreenContainer);")
+s = s.replace("fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));",
+    "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\\n                installFullscreenCursor(view);\\n                installFullscreenCursor(fullscreenContainer);")
 view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
 if view_anchor in s and "addFullscreenControls();" not in s:
     s = s.replace(view_anchor, view_anchor + "\n                addFullscreenControls();", 1)
