@@ -36,7 +36,7 @@ for theme, artwork, foreground_name, background in [
     ("", dark_icon, "ic_launcher_foreground", "#171719"),
     ("-night", light_icon, "ic_launcher_foreground_light", "#f5e3c9"),
 ]:
-    adaptive_dir = res / f"mipmap-anydpi-v26{theme}"
+    adaptive_dir = res / (f"mipmap-night-anydpi-v26" if theme == "-night" else "mipmap-anydpi-v26")
     adaptive_dir.mkdir(parents=True, exist_ok=True)
     fg_dir = res / "mipmap-xxxhdpi"
     fg_dir.mkdir(parents=True, exist_ok=True)
@@ -59,14 +59,15 @@ colors.write_text(c, encoding="utf-8")
 night_colors = res / "values-night" / "colors.xml"
 night_colors.parent.mkdir(parents=True, exist_ok=True)
 night_colors.write_text('<resources><color name="rufilm_icon_background_night">#f5e3c9</color></resources>', encoding="utf-8")
-# Android TV / Google TV banner: the exact same launcher icon, centered, without extra lettering.
-banner = Image.new("RGB",(320,180),(17,17,19))
-logo_size = 176
-logo = icon.resize((logo_size,logo_size),Image.Resampling.LANCZOS)
-banner.paste(logo,((320-logo_size)//2,(180-logo_size)//2),logo)
-banner_dir = res / "drawable-nodpi"
-banner_dir.mkdir(parents=True,exist_ok=True)
-banner.save(banner_dir / "rufilm_tv_banner.png")
+# Android TV / Google TV banners follow the same system appearance.
+for theme, artwork, bg in [("", dark_icon, (17,17,19)), ("-night", light_icon, (245,227,201))]:
+    banner = Image.new("RGB",(320,180),bg)
+    logo_size = 176
+    logo = artwork.resize((logo_size,logo_size),Image.Resampling.LANCZOS)
+    banner.paste(logo,((320-logo_size)//2,(180-logo_size)//2),logo)
+    banner_dir = res / ("drawable-night-nodpi" if theme == "-night" else "drawable-nodpi")
+    banner_dir.mkdir(parents=True,exist_ok=True)
+    banner.save(banner_dir / "rufilm_tv_banner.png")
 
 # Update manifest using XML so the launcher metadata is reliable on Android TV and Google TV.
 import xml.etree.ElementTree as ET
