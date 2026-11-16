@@ -193,7 +193,7 @@ public class NativePlayerActivity extends Activity {
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, dp(54), Gravity.TOP);
         overlay.addView(top, topParams);
         android.widget.TextView title = new android.widget.TextView(this);
-        title.setText("RuFilmTV");
+        title.setText("RUFILM TV");
         title.setTextColor(android.graphics.Color.WHITE);
         title.setTextSize(16);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -565,11 +565,9 @@ public class NativePlayerActivity extends Activity {
             : String.format(Locale.ROOT, "%d:%02d", m, sec);
     }
     private void showAssistantMenu() {
-        String[] items = {"Выбрать сезон", "Выбрать серию", "Качество видео", "Скрыть панель"};
+        String[] items = {"Качество видео", "Скрыть панель"};
         new AlertDialog.Builder(this).setItems(items, (d, which) -> {
-            if (which == 0) showEpisodeSelector(0);
-            else if (which == 1) showEpisodeSelector(1);
-            else if (which == 2) showQualityDialog();
+            if (which == 0) showQualityDialog();
             else hideAssistantControls();
         }).show();
         showAssistantControls();
