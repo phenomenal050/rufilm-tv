@@ -685,30 +685,7 @@ _start = s.find("    private void addFullscreenControls() {")
 _end = s.find("    private void refreshFullscreenSelectors()", _start)
 if _start >= 0 and _end > _start:
     _minimal_controls = r"""    private void addFullscreenControls() {
-        if (fullscreenContainer == null || fullscreenControls != null) return;
-        fullscreenControls = new FrameLayout(this);
-        fullscreenControls.setFocusable(false);
-        fullscreenControls.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE)
-                showFullscreenUi();
-            return false;
-        });
-        fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
-        LinearLayout bar = new LinearLayout(this);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(14), dp(6), dp(14), dp(6));
-        bar.setBackground(shape(0xdd111316, 12));
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, dp(58), Gravity.TOP);
-        params.setMargins(dp(18), dp(16), dp(18), 0);
-        fullscreenControls.addView(bar, params);
-        Button exit = button("Назад", false);
-        exit.setOnClickListener(v -> hideCustomView());
-        bar.addView(exit, new LinearLayout.LayoutParams(dp(82), dp(44)));
-        TextView brand = text("RUFILM TV", 16, Color.WHITE, true);
-        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        brandParams.leftMargin = dp(14);
-        bar.addView(brand, brandParams);
-        showFullscreenUi();
+        // Intentionally empty: use only the original HTML5 player's fullscreen controls.
     }
 
 """
