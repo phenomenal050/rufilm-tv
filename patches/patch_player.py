@@ -663,7 +663,7 @@ s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYS
 
 # Persist all edits, including the native-player bridge appended above.
 # Requested cleanup: preserve the current player, remove redundant season/episode and volume overlay.
-s = s.replace('fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();', 'fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));')
+s = s.replace('fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();', 'fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();')
 # Hide bottom navigation only on film/series detail pages that actually contain a player.
 s = s.replace('private View rootLayout, customView;', 'private View rootLayout, customView, bottomNav;')
 s = s.replace('root.addView(nav);setContentView(root);updateTabs();', 'bottomNav=nav;root.addView(nav);setContentView(root);updateTabs();')
@@ -678,6 +678,54 @@ if 'web.setOverScrollMode(View.OVER_SCROLL_NEVER);' not in s:
     s = s.replace('web.setLayerType(View.LAYER_TYPE_HARDWARE, null);', 'web.setLayerType(View.LAYER_TYPE_HARDWARE, null);\n        web.setOverScrollMode(View.OVER_SCROLL_NEVER);')
 if 'web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);' not in s:
     s = s.replace('web.getSettings().setDomStorageEnabled(true);', 'web.getSettings().setDomStorageEnabled(true);\n        web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);\n        web.getSettings().setSupportZoom(false);\n        web.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);')
+
+# Final UI pass: keep the compact fullscreen bar, but remove season/episode and volume widgets.
+import re as _rufilm_re
+_start = s.find("    private void addFullscreenControls() {")
+_end = s.find("    private void refreshFullscreenSelectors()", _start)
+if _start >= 0 and _end > _start:
+    _minimal_controls = r"""    private void addFullscreenControls() {
+        if (fullscreenContainer == null || fullscreenControls != null) return;
+        fullscreenControls = new FrameLayout(this);
+        fullscreenControls.setFocusable(false);
+        fullscreenControls.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE)
+                showFullscreenUi();
+            return false;
+        });
+        fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(14), dp(6), dp(14), dp(6));
+        bar.setBackground(shape(0xdd111316, 12));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, dp(58), Gravity.TOP);
+        params.setMargins(dp(18), dp(16), dp(18), 0);
+        fullscreenControls.addView(bar, params);
+        Button exit = button("Назад", false);
+        exit.setOnClickListener(v -> hideCustomView());
+        bar.addView(exit, new LinearLayout.LayoutParams(dp(82), dp(44)));
+        TextView brand = text("RUFILM TV", 16, Color.WHITE, true);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        brandParams.leftMargin = dp(14);
+        bar.addView(brand, brandParams);
+        showFullscreenUi();
+    }
+
+"""
+    s = s[:_start] + _minimal_controls + s[_end:]
+# Hide the bottom tabs on any non-home page where the actual video player/embed is present.
+_nav = _rufilm_re.search(r"    private void updateBottomNavForPage\(String url\) \{.*?\n    \}", s, _rufilm_re.S)
+if _nav:
+    _nav_method = r"""    private void updateBottomNavForPage(String url) {
+        if (bottomNav == null || web == null) return;
+        boolean home = url == null || "/".equals(Uri.parse(url).getPath()) || Uri.parse(url).getPath().isEmpty();
+        if (home) { bottomNav.setVisibility(View.VISIBLE); return; }
+        web.evaluateJavascript("(function(){return !!document.querySelector('video, .jwplayer, .video-js, iframe[src*=player], iframe[src*=video], iframe[src*=embed], [class*=player], [id*=player]');})()", value -> {
+            if (bottomNav != null) bottomNav.setVisibility("true".equals(value) ? View.GONE : View.VISIBLE);
+        });
+    }"""
+    s = s[:_nav.start()] + _nav_method + s[_nav.end():]
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
