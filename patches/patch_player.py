@@ -366,15 +366,24 @@ fullscreen_fields = r"""
     }
     private void installFullscreenCursor(View target) {
         if (target == null || Build.VERSION.SDK_INT < 24) return;
-        target.setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW));
+        final PointerIcon arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW);
+        target.setPointerIcon(arrow);
         target.setOnHoverListener((v, event) -> {
-            int action=event.getAction();
-            if (action==MotionEvent.ACTION_HOVER_ENTER || action==MotionEvent.ACTION_HOVER_MOVE || action==MotionEvent.ACTION_SCROLL) {
-                v.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_HOVER_ENTER ||
+                    action == MotionEvent.ACTION_HOVER_MOVE ||
+                    action == MotionEvent.ACTION_SCROLL) {
+                v.setPointerIcon(arrow);
                 revealSystemCursor();
             }
             return false;
         });
+        if (target instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) target;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                installFullscreenCursor(group.getChildAt(i));
+            }
+        }
     }
     private final Runnable hideFullscreenUi = () -> {
         if (fullscreenControls != null) fullscreenControls.animate().alpha(0f).setDuration(220L).withEndAction(() -> {
@@ -572,144 +581,15 @@ fullscreen_methods = r"""
         boolean handled = super.dispatchGenericMotionEvent(event);
         if (customView != null && event != null) {
             int action = event.getAction();
-            if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_SCROLL) {
+            if (action == MotionEvent.ACTION_HOVER_ENTER ||
+                    action == MotionEvent.ACTION_HOVER_MOVE ||
+                    action == MotionEvent.ACTION_SCROLL) {
                 revealSystemCursor();
-                showFullscreenUi();
-                PointerIcon arrow = Build.VERSION.SDK_INT >= 24 ? PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW) : null;
-                if (Build.VERSION.SDK_INT >= 24 && arrow != null) {
-                    getWindow().getDecorView().setPointerIcon(arrow);
-                    if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(arrow);
-                    if (customView != null) customView.setPointerIcon(arrow);
-                    if (web != null) web.setPointerIcon(arrow);
-                    if (event.getAction() == MotionEvent.ACTION_HOVER_MOVE) {
-                        customView.post(() -> {
-                            if (customView != null) customView.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                            if (fullscreenContainer != null) fullscreenContainer.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                            getWindow().getDecorView().setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                        });
-                    }
-                }
+                setSystemCursorVisible(true);
             }
         }
         return handled;
-    }
-"""
-if "private void addFullscreenControls()" not in s:
-    anchor = "    private void hideCustomView(){"
-    if anchor not in s:
-        raise SystemExit("fullscreen methods anchor missing")
-    s = s.replace(anchor, fullscreen_methods + "\n" + anchor, 1)
-
-# Keep a visible system mouse pointer on the fullscreen video surface itself.
-s = s.replace("fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));",
-    "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                installFullscreenCursor(view);\n                installFullscreenCursor(fullscreenContainer);")
-view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
-if view_anchor in s and "addFullscreenControls();" not in s:
-    s = s.replace(view_anchor, view_anchor + "\n                addFullscreenControls();", 1)
-
-hide_anchor = "if(customView==null)return;";
-if "fullscreenUiHandler.removeCallbacks(hideSystemCursor);" not in s:
-    s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideSystemCursor);", 1)
-if hide_anchor in s and "fullscreenUiHandler.removeCallbacks(hideFullscreenUi);" not in s:
-    s = s.replace(hide_anchor, hide_anchor + "\n        fullscreenUiHandler.removeCallbacks(hideFullscreenUi);fullscreenControls=null;", 1)
-
-key_anchor = "    @Override public boolean dispatchKeyEvent(KeyEvent event) {"
-key_inject = "if(customView!=null && event.getAction()==KeyEvent.ACTION_DOWN) showFullscreenUi();"
-if key_anchor in s and key_inject not in s:
-    s = s.replace(key_anchor, key_anchor + "\n        " + key_inject, 1)
-
-
-s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,36,40),\n        accent = Color.rgb(215,52,69), muted = Color.rgb(173,176,183);',
-'''private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,36,40),
-        muted = Color.rgb(173,176,183);
-    private int accent = Color.rgb(215,52,69);
-    private Button themeButton;
-    private int selectedTheme = 0;
-    private final String[] themeNames = {"Красный","Фиолетовый","Синий","Голубой","Бирюзовый","Зелёный","Лайм","Оранжевый","Розовый","Золотой"};
-    private final int[] themeColors = {0xffd73445,0xff9b6bdb,0xff3978e8,0xff20a6d8,0xff16a6a0,0xff35a866,0xff91b832,0xffe88732,0xffdc669e,0xffc49a42};''')
-s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
-s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
-s = s.replace('playerMode = prefs.getString("player_mode", "native");',
-'''playerMode = prefs.getString("player_mode", "native");
-        selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
-        accent = themeColors[selectedTheme];''')
-s = s.replace('''        playerButton=button("Плеер",false);playerButton.setTextSize(9);''', '''        themeButton=button("Цвет",false);themeButton.setTextSize(9);
-        themeButton.setOnClickListener(v->showThemeDialog());
-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(dp(54),dp(42));tp.leftMargin=dp(5);header.addView(themeButton,tp);
-        playerButton=button("Плеер",false);playerButton.setTextSize(9);''')
-s = s.replace('root.addView(nav);setContentView(root);updateTabs();',
-              'root.addView(nav);setContentView(root);updateTabs();applyTheme(false);')
-s = s.replace('''                    injectExternalPlayerHook(view);
-                    applyCleanMode();''', '''                    injectExternalPlayerHook(view);
-                    applyTheme(true);
-                    applyCleanMode();''')
-methods = r"""
-    private void showThemeDialog() {
-        new AlertDialog.Builder(this).setTitle("Цвет оформления")
-            .setSingleChoiceItems(themeNames, selectedTheme, (dialog, which) -> {
-                selectedTheme = which; accent = themeColors[which];
-                prefs.edit().putInt("theme_index", which).apply();
-                applyTheme(true); dialog.dismiss();
-            }).setNegativeButton("Закрыть", null).show();
-    }
-    private void applyTheme(boolean updateWeb) {
-        if (rootLayout != null) rootLayout.setBackgroundColor(bg);
-        if (cleanButton != null) cleanButton.setBackground(shape(cleanMode ? accent : panel, 13));
-        if (filterButton != null) filterButton.setBackground(shape(panel, 13));
-        if (playerButton != null) playerButton.setBackground(shape(panel, 13));
-        if (themeButton != null) themeButton.setBackground(shape(accent, 13));
-        if (web != null && updateWeb) {
-            String a = String.format(Locale.US, "#%06X", (0xFFFFFF & accent));
-            String js = "(function(){var id='rufilm-theme-colors',accent='" + a + "';" +
-                "function install(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(id);if(!st){st=d.createElement('style');st.id=id;(d.head||d.documentElement).appendChild(st);}" +
-                "var css=':root{--rf-accent:'+accent+'!important;--rf-red:'+accent+'!important;--primary:'+accent+'!important;--accent:'+accent+'!important;color-scheme:dark;}'" +
-                "+'a,a:visited,.link,.pagination a,.pages a,.navigation a,.pagi a,.description a,.entry-content a{color:'+accent+'!important;}'" +
-                "+'a:focus,button:focus,input:focus,select:focus,textarea:focus,[tabindex]:focus{outline:3px solid '+accent+'!important;outline-offset:2px!important;}'" +
-                "+'button,input[type=submit],input[type=button],.active,.current,.pagination .active,.pages .active,.selected,.is-active,[aria-current=true]{background:'+accent+'!important;border-color:'+accent+'!important;color:#fff!important;}'" +
-                "+'input[type=checkbox],input[type=radio],progress{accent-color:'+accent+'!important;}'" +
-                "+'::selection{background:'+accent+'!important;color:#fff!important;}'" +
-                "+'article,.shortstory,.short-story,.movie-item,.film-item,.serial-item,.item,.post,.news-item,.story,.content-item,.movie,.film,.serial,.card{border-color:'+accent+'66!important;}'" +
-                "+'.progress,.progress-bar,.video-js .vjs-play-progress,.plyr__progress__played{background-color:'+accent+'!important;}';st.textContent=css;" +
-                "}catch(e){}}" +
-                "install(document);function scan(){var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{install(fs[i].contentDocument);}catch(e){}if(!fs[i].__rufilmThemeBound){fs[i].__rufilmThemeBound=true;fs[i].addEventListener('load',function(){try{install(this.contentDocument);}catch(e){}});}}}" +
-                "scan();if(!window.__rufilmThemeObserver){window.__rufilmThemeObserver=new MutationObserver(scan);window.__rufilmThemeObserver.observe(document.documentElement,{childList:true,subtree:true});}})();";
-            web.evaluateJavascript(js, null);
-        }
-        updateTabs();
-    }
-"""
-if "private void showThemeDialog()" not in s:
-    s = s.replace("    private void updateFilterLists(){", methods + "\n    private void updateFilterLists(){")
-s=s.replace('''                if (Build.VERSION.SDK_INT >= 24) {
-                    view.setOnHoverListener((v, event) -> {''', '''                if (Build.VERSION.SDK_INT >= 24) {
-                    view.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                    view.setOnHoverListener((v, event) -> {''', 1)
-s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLACK);
-                fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''', '''                fullscreenContainer.setBackgroundColor(Color.BLACK);
-                if (Build.VERSION.SDK_INT >= 24) {
-                    fullscreenContainer.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                    fullscreenContainer.setOnHoverListener((v, event) -> {
-                        if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER || event.getAction() == MotionEvent.ACTION_HOVER_MOVE)
-                            v.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                        return false;
-                    });
-                }
-                fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
-
-# Keep the Android mouse cursor available while the WebView custom view is fullscreen.
-s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);',
-              'decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);')
-
-# Persist all edits, including the native-player bridge appended above.
-# Requested cleanup: preserve the current player, remove redundant season/episode and volume overlay.
-s = s.replace('fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();', 'fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();')
-# Hide bottom navigation only on film/series detail pages that actually contain a player.
-s = s.replace('private View rootLayout, customView;', 'private View rootLayout, customView, bottomNav;')
-s = s.replace('root.addView(nav);setContentView(root);updateTabs();', 'bottomNav=nav;root.addView(nav);setContentView(root);updateTabs();')
-s = s.replace('pageTitle.setText(titleFor(url));\n                view.evaluateJavascript(skin, ignored -> {', 'pageTitle.setText(titleFor(url));\n                updateBottomNavForPage(url);\n                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> updateBottomNavForPage(url), 1000L);\n                view.evaluateJavascript(skin, ignored -> {')
-s = s.replace('pageTitle.setText(titleFor(url));\n                firstPageReady = true;', 'pageTitle.setText(titleFor(url));\n                if (bottomNav != null) bottomNav.setVisibility(View.VISIBLE);\n                firstPageReady = true;')
-if 'private void updateBottomNavForPage(String url)' not in s:
-    nav_method = '''\n    private void updateBottomNavForPage(String url) {\n        if (bottomNav == null || web == null) return;\n        boolean detail = url != null && url.matches("(?i).*://[^/]+/(films?|serials?)/[^/?#]+.*");\n        if (!detail) { bottomNav.setVisibility(View.VISIBLE); return; }\n        web.evaluateJavascript("(function(){return !!document.querySelector('video, .player iframe, .video iframe, iframe[src*=player], iframe[src*=video], iframe[src*=embed]');})()", value -> {\n            if (bottomNav != null) bottomNav.setVisibility("true".equals(value) ? View.GONE : View.VISIBLE);\n        });\n    }\n'''
+    }}\n'''
     anchor = '    private String titleFor(String url){'
     if anchor not in s: raise SystemExit('titleFor anchor missing')
     s = s.replace(anchor, nav_method + anchor, 1)
