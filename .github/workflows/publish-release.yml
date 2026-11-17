@@ -97,7 +97,8 @@ jobs:
       - name: Verify Premium Cinema against the live RuFilmTV DOM
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet selenium
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium
           python3 patches/verify_premium_layout.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
 
 
