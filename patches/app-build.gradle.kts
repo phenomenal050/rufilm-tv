@@ -17,6 +17,11 @@ android {
         applicationId = "tv.rufilm.app"
         minSdk = 23
         targetSdk = 28
+
+    // Sideloaded Android TV build; keep legacy target for device compatibility.
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
         versionCode = 19
         versionName = "3.0.3"
     }
