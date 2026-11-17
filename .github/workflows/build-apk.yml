@@ -1,5 +1,5 @@
 name: Build RuFilmTV 3.0.2 APK
-# Build workflow — final updater, branding, package metadata and signature verification
+# Build workflow — persistent release signing is mandatory
 
 on:
   workflow_dispatch:
@@ -43,25 +43,26 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Configure persistent signing key when repository secrets are available
+      - name: Configure persistent signing key (required)
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
-            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rufilm-release.jks"
-            test -s "$RUNNER_TEMP/rufilm-release.jks"
-            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/rufilm-release.jks" >> "$GITHUB_ENV"
-            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-            echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
-            echo "Persistent RuFilmTV signing key configured."
-          else
-            echo "Persistent signing secrets are not configured; this is a debug/test APK signed with the runner's temporary Android debug key."
+          set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Persistent Android signing secrets are missing. Refusing to create an APK with a temporary debug key."
+            exit 1
           fi
-
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rufilm-release.jks"
+          test -s "$RUNNER_TEMP/rufilm-release.jks"
+          keytool -list -v -keystore "$RUNNER_TEMP/rufilm-release.jks" -storetype JKS -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/rufilm-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "Persistent RuFilmTV signing key loaded and validated."
       - name: Install RuFilmTV branding and Android TV assets
         run: |
           python3 -m pip install --quiet pillow cairosvg
@@ -73,7 +74,7 @@ jobs:
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
-      - name: Build debug APK
+      - name: Build APK with persistent signing key
         working-directory: rufilm-tv-2.9
         run: gradle --no-daemon assembleDebug
       - name: Verify APK package metadata, signing and SHA-256
