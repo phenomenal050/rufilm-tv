@@ -6,11 +6,13 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.2"
+        default: "v3.0.3"
         type: string
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-release.yml"
 
 permissions:
   contents: write
@@ -45,7 +47,7 @@ jobs:
 
       - name: Resolve and validate release version
         env:
-          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v3.0.3' }}
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
