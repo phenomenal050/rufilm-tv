@@ -213,8 +213,7 @@ if "installEpisodeSelectorSupport()" not in s:
         raise SystemExit("Could not find insertion point for episode selector support.")
     s = s.replace(anchor, episode_support + anchor, 1)
 
-if "MainActivity.this.installEpisodeSelectorSupport();
-                MainActivity.this.installPremiumTopNavigation();" not in s:
+if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installPremiumTopNavigation();" not in s:
     page_finished = re.search(
         r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
         s
