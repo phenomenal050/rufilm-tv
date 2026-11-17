@@ -1,55 +1,52 @@
 #!/usr/bin/env python3
-"""Run the exact embedded Premium Cinema script against the live RuFilmTV DOM."""
-import base64
-import re
-import sys
-import time
+"""Verify the exact injected Premium Cinema JS against the live catalog DOM."""
+import base64, re, sys, time
 from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+java = Path(sys.argv[1]).read_text(encoding="utf-8")
+m = re.search(r'final String encoded\s*=\s*"([A-Za-z0-9+/=]+)"', java)
+if not m:
+    raise SystemExit("Premium JS payload not found in generated MainActivity.java")
+payload = base64.b64decode(m.group(1)).decode("utf-8")
 
-java_path = Path(sys.argv[1])
-source = java_path.read_text(encoding="utf-8")
-match = re.search(r'final String encoded = "([A-Za-z0-9+/=]+)";', source)
-if not match:
-    raise SystemExit("Could not find embedded Premium layout payload in generated MainActivity.java")
-payload = base64.b64decode(match.group(1)).decode("utf-8")
-
-options = Options()
-options.add_argument("--headless=new")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-gpu")
-options.add_argument("--window-size=1920,1080")
-options.add_argument("--disable-blink-features=AutomationControlled")
-
-driver = webdriver.Chrome(options=options)
-try:
-    driver.set_page_load_timeout(45)
-    driver.get("https://rufilmtv.tv/serials")
-    time.sleep(6)
-    driver.execute_script(payload)
-    time.sleep(2)
-    report = driver.execute_script("return window.__rfPremiumReport || null")
-    if not report:
-        raise SystemExit("Premium script ran but did not publish a DOM report")
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
+    # Third-party ad/media resources often stall page load; retain first-party scripts and images.
+    page.route("**/*", lambda route: route.abort() if (
+        route.request.resource_type in ("media", "font") or
+        any(x in route.request.url.lower() for x in (
+            "doubleclick.net", "googlesyndication.com", "google-analytics.com",
+            "adservice.", " kaspi", "facebook.net", "hotjar.com"
+        ))
+    ) else route.continue_())
+    try:
+        page.goto("https://rufilmtv.tv/serials", wait_until="domcontentloaded", timeout=90000)
+    except Exception as e:
+        # DOMContentLoaded can be delayed by third-party scripts; still inspect a usable document.
+        print("Navigation note:", str(e)[:300])
+    page.wait_for_timeout(12000)
+    if not page.locator("body").count():
+        raise SystemExit("Site document did not become available")
+    page.evaluate(payload)
+    page.wait_for_timeout(2500)
+    report = page.evaluate("window.__rfPremiumReport || null")
     print("LIVE DOM REPORT:", report)
-    if not report.get("style"):
-        raise SystemExit("Premium stylesheet was not attached to the live document")
+    if not report or not report.get("style"):
+        raise SystemExit("Premium stylesheet did not attach to live page")
     cards = report.get("cards") or {}
     if not cards.get("grid") or cards.get("cards", 0) < 3:
-        raise SystemExit("Live catalog was not converted into a 3+ card grid: " + str(cards))
-    computed = driver.execute_script("""
+        raise SystemExit("Live DOM did not produce a 3-card grid: " + str(cards))
+    computed = page.evaluate("""() => {
       const el=document.querySelector('.rf-premium-grid');
       if(!el) return null;
-      return {display:getComputedStyle(el).display,
-              columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,
-              directItems:el.querySelectorAll(':scope > .rf-premium-grid-item').length};
-    """)
-    print("LIVE GRID COMPUTED STYLE:", computed)
-    if not computed or computed["display"] != "grid" or computed["columns"] != 3:
-        raise SystemExit("Live CSS grid is not exactly three columns: " + str(computed))
+      const cs=getComputedStyle(el);
+      return {display:cs.display,columns:cs.gridTemplateColumns.split(' ').length,
+              items:el.querySelectorAll(':scope > .rf-premium-grid-item').length};
+    }""")
+    print("LIVE COMPUTED GRID:", computed)
+    if not computed or computed["display"] != "grid" or computed["columns"] != 3 or computed["items"] < 3:
+        raise SystemExit("Computed grid is not exactly 3 columns: " + str(computed))
     print("LIVE DOM/CSS CHECK PASSED")
-finally:
-    driver.quit()
+    browser.close()
