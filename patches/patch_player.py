@@ -696,6 +696,11 @@ methods = r"""
     }
     private void applyTheme(boolean updateWeb) {
         if (rootLayout != null) rootLayout.setBackgroundColor(bg);
+        // Keep the original backup UI; move only native app controls into the More dialog.
+        if (cleanButton != null) cleanButton.setVisibility(View.GONE);
+        if (themeButton != null) themeButton.setVisibility(View.GONE);
+        if (filterButton != null) filterButton.setVisibility(View.GONE);
+        if (playerButton != null) playerButton.setVisibility(View.GONE);
         if (cleanButton != null) cleanButton.setBackground(shape(cleanMode ? accent : panel, 13));
         if (filterButton != null) filterButton.setBackground(shape(panel, 13));
         if (playerButton != null) playerButton.setBackground(shape(panel, 13));
@@ -857,11 +862,15 @@ once('        Button search=button("⌕",true);',
      "app menu button")
 once("    private void showPlayerDialog() {",
      '''    private void showAppMenu() {
-        String[] items = {"Проверить обновления", "Выбрать видеоплеер", "Обновить списки рекламы"};
-        new AlertDialog.Builder(this).setTitle("RuFilmTV").setItems(items, (dialog, which) -> {
-            if (which == 0) AppUpdateManager.check(MainActivity.this);
-            else if (which == 1) showPlayerDialog();
-            else updateFilterLists();
+        String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
+                "Проверить обновления", "Обновить списки рекламы"};
+        new AlertDialog.Builder(this).setTitle("Ещё").setItems(items, (dialog, which) -> {
+            if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
+            else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
+            else if (which == 2) { if (filterButton != null) filterButton.performClick(); }
+            else if (which == 3) showPlayerDialog();
+            else if (which == 4) AppUpdateManager.check(MainActivity.this);
+            else if (which == 5) updateFilterLists();
         }).show();
     }
 
