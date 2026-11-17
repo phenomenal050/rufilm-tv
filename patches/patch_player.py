@@ -995,8 +995,9 @@ if layout_call not in s:
 # Here s is the generated MainActivity.java content, not this patcher source.
 if "private void installPremiumLayout()" not in s:
     raise SystemExit("Premium layout method missing from generated MainActivity.java")
-if not re.search(r"onPageFinished\s*\([^)]*\)[^{]*\{[\s\S]{0,1200}MainActivity\.this\.installPremiumLayout\(\);", s):
-    raise SystemExit("Premium layout call missing from generated onPageFinished")
+nav_call = "                MainActivity.this.installPremiumTopNavigation();"
+if nav_call + "\\n" + layout_call not in s:
+    raise SystemExit("Premium layout call is not adjacent to the page-finished navigation hook")
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
