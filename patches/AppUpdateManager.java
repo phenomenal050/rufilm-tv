@@ -360,9 +360,9 @@ public final class AppUpdateManager {
         String comparison = installedName.equals(candidateName)
             ? "versionName не изменился, но versionCode увеличился."
             : "versionName изменился.";
-        String message = "Текущая версия: " + installedName + " (versionCode " + installedCode + ")\\n" +
-            "Новая версия: " + candidateName + " (versionCode " + candidateCode + ")\\n\\n" +
-            "SHA-256 APK проверен. applicationId и сертификат подписи совпадают. " + comparison + "\\n\\n" +
+        String message = "Текущая версия: " + installedName + " (versionCode " + installedCode + ")\n" +
+            "Новая версия: " + candidateName + " (versionCode " + candidateCode + ")\n\n" +
+            "SHA-256 APK проверен. applicationId и сертификат подписи совпадают. " + comparison + "\n\n" +
             "Далее откроется штатный установщик Android, который отдельно запросит подтверждение.";
         new AlertDialog.Builder(activity)
             .setTitle("Обновление проверено")
