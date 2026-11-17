@@ -2,40 +2,36 @@
 
 The Android application uses `applicationId = tv.rufilm.app`. Version 3.0.2 is built with `versionCode = 18`.
 
-## GitHub updater
+## In-app GitHub updater
 
-The in-app item **Ещё → Проверить обновления** reads the latest public GitHub Release from this repository. It looks for an APK asset and its GitHub `sha256:` digest, downloads the APK only after the user confirms, verifies the checksum, checks the APK package ID and version, and compares the installed and downloaded signing certificates. A certificate or package mismatch stops the process. The app then opens Android's standard package installer; the user must confirm installation.
+The in-app item **Ещё → Проверить обновления** reads the latest public GitHub Release from this repository. It looks for an APK asset and its GitHub SHA-256 digest, downloads the APK only after the user confirms, verifies the checksum, checks the APK package ID and version, and compares the installed and downloaded signing certificates. A certificate or package mismatch stops the process. The app then opens Android's standard package installer; the user must confirm installation.
 
-The updater intentionally fails closed if the Release has no APK or no SHA-256 digest. The repository currently needs its first published Release before the in-app checker can offer an update.
+The updater intentionally fails closed if the Release has no APK or no SHA-256 digest. Keep publishing APKs as GitHub Release assets. The first published release establishes the update channel; later releases must have a higher `versionCode` and use the same signing key.
 
-## One-time signing setup
+## Publishing the first release
 
-**Do not publish update APKs using the default GitHub Actions debug key.** GitHub-hosted runners create a different debug key on fresh runners, so those APKs are not guaranteed to update one another.
+1. Open **Actions → Publish RuFilmTV GitHub Release**.
+2. Choose **Run workflow** on the `main` branch.
+3. Keep the default tag `v3.0.2` and run it.
+4. Wait for the job to finish successfully. It creates the GitHub Release and attaches the signed APK plus a SHA-256 checksum file.
 
-Create one private release keystore and keep a secure backup. Never commit it to this public repository:
+The manual workflow validates that the tag version matches `versionName` in `patches/app-build.gradle.kts`, validates the persistent signing key, builds a release APK, verifies its package/version/signature, and publishes the APK. The same workflow also runs automatically when a `v*` tag is pushed.
 
-```bash
-keytool -genkeypair -v \
-  -keystore rufilm-tv-release.jks \
-  -alias rufilm-tv \
-  -keyalg RSA -keysize 4096 \
-  -validity 10000
-base64 -w0 rufilm-tv-release.jks
-```
+The currently installed 3.0.2 app will see the initial 3.0.2 release as the same version, not as an update. This first release only initializes the channel. For every future update, increase both `versionCode` and `versionName` in `patches/app-build.gradle.kts`, then run the workflow with the matching tag (for example, `v3.0.3`). Do not reuse a published tag.
 
-Add these repository Actions secrets:
+## Signing key
 
-- `ANDROID_SIGNING_KEYSTORE_BASE64` — the one-line Base64 output
+**Do not publish update APKs using a different signing key or the default GitHub Actions debug key.** Every update must use the same persistent keystore already configured in GitHub Actions secrets.
+
+Required repository Actions secrets:
+
+- `ANDROID_SIGNING_KEYSTORE_BASE64` — the one-line Base64 keystore
 - `ANDROID_KEYSTORE_PASSWORD` — keystore password
-- `ANDROID_KEY_ALIAS` — `rufilm-tv` (or the alias you chose)
+- `ANDROID_KEY_ALIAS` — key alias
 - `ANDROID_KEY_PASSWORD` — key password
 
-Both the debug build and the release workflow use this same keystore when all four secrets are present. The tag workflow builds a signed Release APK, verifies its package/version/signature, creates a SHA-256 sidecar, and publishes both files as a GitHub Release.
+Never commit the keystore or its passwords to this public repository. Keep a secure backup. Losing the key means Android will reject in-place updates.
 
-After the signing secrets are configured, push a version tag such as `v3.0.2` to publish a Release. Keep using the same keystore for every later version; losing it means Android will reject in-place updates.
+## Installation behavior
 
-## First-install migration warning
-
-The earlier CI APK was signed with an ephemeral Android debug certificate. Its private key is not stored in this repository. A first APK signed with a newly created persistent keystore therefore cannot update that old installation in place. For the one-time migration, uninstall the old RuFilmTV build, install the first APK signed with the persistent keystore, and then use the in-app updater for subsequent releases. Back up any app data you need before uninstalling.
-
-The app never attempts a silent install. Android's package installer and the user remain in control.
+The app verifies SHA-256, application ID, version code and signing certificate before offering the APK to Android. It never attempts a silent install. Android's package installer and the user remain in control. The one-time permission to install unknown apps may be requested in Android settings.
