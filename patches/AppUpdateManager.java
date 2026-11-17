@@ -243,18 +243,20 @@ public final class AppUpdateManager {
                     throw new SignatureMismatchException();
 
                 File verifiedApk = apk;
+                String installedName = installed.versionName == null ? "—" : installed.versionName;
+                String candidateName = candidate.versionName == null ? "—" : candidate.versionName;
                 activity.runOnUiThread(() -> {
                     if (!isAlive(activity)) return;
                     progress.dismiss();
-                    pendingInstallFile = verifiedApk;
-                    requestInstallPermissionOrLaunch(activity);
+                    showVerifiedUpdateDialog(activity, verifiedApk,
+                        installedName, installedCode, candidateName, candidateCode);
                 });
             } catch (Exception e) {
                 if (apk != null && apk.exists()) apk.delete();
                 activity.runOnUiThread(() -> {
                     if (!isAlive(activity)) return;
                     progress.dismiss();
-                    showError(activity, "Обновление не установлено", readableError(e));
+                    showError(activity, e instanceof NoUpdateException ? "Обновлений нет" : "Обновление не установлено", readableError(e));
                 });
             }
         });
@@ -350,6 +352,27 @@ public final class AppUpdateManager {
 
     private static boolean sameSigningCertificates(PackageInfo installed, PackageInfo candidate) throws Exception {
         return signingFingerprints(installed).equals(signingFingerprints(candidate));
+    }
+
+    private static void showVerifiedUpdateDialog(Activity activity, File apk,
+                                                  String installedName, long installedCode,
+                                                  String candidateName, long candidateCode) {
+        String comparison = installedName.equals(candidateName)
+            ? "versionName не изменился, но versionCode увеличился."
+            : "versionName изменился.";
+        String message = "Текущая версия: " + installedName + " (versionCode " + installedCode + ")\\n" +
+            "Новая версия: " + candidateName + " (versionCode " + candidateCode + ")\\n\\n" +
+            "SHA-256 APK проверен. applicationId и сертификат подписи совпадают. " + comparison + "\\n\\n" +
+            "Далее откроется штатный установщик Android, который отдельно запросит подтверждение.";
+        new AlertDialog.Builder(activity)
+            .setTitle("Обновление проверено")
+            .setMessage(message)
+            .setPositiveButton("Открыть установщик", (dialog, which) -> {
+                pendingInstallFile = apk;
+                requestInstallPermissionOrLaunch(activity);
+            })
+            .setNegativeButton("Отмена", (dialog, which) -> apk.delete())
+            .show();
     }
 
     private static void requestInstallPermissionOrLaunch(Activity activity) {
