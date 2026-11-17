@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.9"
+        default: "v3.0.10"
         type: string
   push:
     branches:
@@ -50,7 +50,7 @@ jobs:
 
       - name: Resolve and validate release version
         env:
-          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v3.0.9' }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v3.0.10' }}
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
