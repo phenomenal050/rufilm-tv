@@ -1,4 +1,4 @@
-name: Build RuFilmTV 3.0.2 APK
+name: Build RuFilmTV APK
 # Build workflow — persistent release signing is mandatory
 
 on:
@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Extract RuFilmTV 3.0.0 project
+      - name: Extract RuFilmTV project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
       - name: Export base MainActivity source for inspection
         run: cp rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java "$RUNNER_TEMP/MainActivity.java"
@@ -74,17 +74,27 @@ jobs:
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+      - name: Resolve app version
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\\([^"]*\\)".*/\\1/p' patches/app-build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \\([0-9][0-9]*\\).*/\\1/p' patches/app-build.gradle.kts | head -n 1)"
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE"
+          echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "APK_ARTIFACT_NAME=RuFilmTV-$VERSION_NAME-APK" >> "$GITHUB_ENV"
       - name: Build APK with persistent signing key
         working-directory: rufilm-tv-2.9
         run: gradle --no-daemon assembleDebug
       - name: Verify APK package metadata, signing and SHA-256
         run: |
+          set -euo pipefail
           APK="rufilm-tv-2.9/app/build/outputs/apk/debug/app-debug.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep -F "name='tv.rufilm.app' versionCode='18' versionName='3.0.2'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep -F "name='tv.rufilm.app' versionCode='$APP_VERSION_CODE' versionName='$APP_VERSION_NAME'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: RuFilmTV-3.0.2-APK
+          name: ${{ env.APK_ARTIFACT_NAME }}
           path: rufilm-tv-2.9/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
