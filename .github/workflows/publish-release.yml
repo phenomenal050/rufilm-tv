@@ -13,6 +13,8 @@ on:
       - main
     paths:
       - ".github/workflows/publish-release.yml"
+      - "patches/brand_tv.py"
+      - "patches/app-build.gradle.kts"
 
 permissions:
   contents: write
