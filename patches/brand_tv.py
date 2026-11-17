@@ -44,7 +44,7 @@ night.write_text('<resources><color name="rufilm_icon_background_night">#171719<
 
 # Install the exact selected Android TV tiles; their artwork is not redrawn.
 import base64
-for suffix, asset_name in [("", "banner_light.b64"), ("-night", "banner_dark.b64")]:
+for suffix, asset_name in [("", "banner_modern_light.b64"), ("-night", "banner_modern_dark.b64")]:
     folder = res / ("drawable-night-nodpi" if suffix else "drawable-nodpi")
     folder.mkdir(parents=True, exist_ok=True)
     stale_png = folder / "rufilm_tv_banner.png"
