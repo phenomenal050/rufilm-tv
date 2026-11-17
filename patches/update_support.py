@@ -30,7 +30,7 @@ provider = next((x for x in app.findall("provider") if x.get(a + "name") == prov
 if provider is None:
     provider = ET.SubElement(app, "provider", {
         a + "name": provider_name,
-        a + "authorities": "\${applicationId}.fileprovider",
+        a + "authorities": "$" + "{applicationId}.fileprovider",
         a + "exported": "false",
         a + "grantUriPermissions": "true",
     })
