@@ -267,7 +267,7 @@ public final class AppUpdateManager {
             connection.setRequestProperty("Accept", "application/octet-stream");
             int status = connection.getResponseCode();
             if (status != 200) throw new java.io.IOException("Не удалось скачать APK: HTTP " + status);
-            long expected = connection.getContentLengthLong();
+            long expected = connection.getContentLength();
             if (expected > MAX_APK_BYTES) throw new java.io.IOException("APK превышает допустимый размер.");
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (InputStream input = connection.getInputStream();
