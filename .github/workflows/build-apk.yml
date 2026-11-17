@@ -1,5 +1,5 @@
 name: Build RuFilmTV 3.0.2 APK
-# Build workflow
+# Build workflow — final updater, branding, package metadata and signature verification
 
 on:
   workflow_dispatch:
