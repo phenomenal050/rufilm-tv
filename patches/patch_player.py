@@ -954,7 +954,7 @@ function cards(d){try{
  var ancestor=list[0].parentElement,found=null,items=[];
  while(ancestor&&ancestor!==d.body){
    var direct=[].filter.call(ancestor.children,function(ch){return list.some(function(c){return ch===c||ch.contains(c);});});
-   if(direct.length>=3&&direct.length===list.length){found=ancestor;items=direct;break;}
+   if(direct.length>=3){found=ancestor;items=direct;break;}
    ancestor=ancestor.parentElement;
  }
  if(!found)return {cards:list.length,grid:false,reason:'no-common-card-row'};
