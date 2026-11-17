@@ -932,7 +932,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:560px){.rf-premium-grid{grid-template-columns:1fr!important}}
 `;
 function visible(e){if(!e||!e.getBoundingClientRect)return false;var r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>100&&r.height>60&&s.display!=='none'&&s.visibility!=='hidden';}
-function style(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(sid);if(!st){st=d.createElement('style');st.id=sid;(d.head||d.documentElement).appendChild(st);}st.textContent=css;d.documentElement.classList.add('rf-premium-page');}catch(e){}}
+function style(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(sid);if(!st){st=d.createElement('style');st.id=sid;(d.head||d.documentElement).appendChild(st);}st.textContent=css+
+'.rf-premium-search{display:flex!important;align-items:center!important;gap:10px!important;max-width:760px!important;margin:16px auto 20px!important;padding:10px!important;background:#191b20!important;border:1px solid #30333b!important;border-radius:14px!important;box-shadow:0 6px 20px rgba(0,0,0,.2)!important}.rf-premium-search input{flex:1 1 auto!important;width:100%!important;min-width:0!important;min-height:50px!important;padding:0 16px!important;font-size:17px!important}.rf-premium-search button,.rf-premium-search input[type=submit]{flex:0 0 auto!important;min-width:104px!important;min-height:50px!important;background:#d73445!important;border:0!important;border-radius:10px!important;font-weight:700!important}.rf-premium-filter-group{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:8px!important;margin:8px 0!important;padding:10px 12px!important;background:#191b20!important;border:1px solid #30333b!important;border-radius:12px!important}.rf-premium-filter-group a,.rf-premium-filter-group button{display:inline-flex!important;align-items:center!important;min-height:38px!important;padding:0 12px!important;background:#252830!important;border:1px solid #3a3d46!important;border-radius:8px!important;color:#e8e8eb!important;text-decoration:none!important}.rf-premium-filter-group a:focus,.rf-premium-filter-group button:focus{background:#d73445!important;color:#fff!important}.rf-premium-seo-intro{display:none!important}';
+d.documentElement.classList.add('rf-premium-page');}catch(e){}}
 function cards(d){try{
  var imgs=[].slice.call(d.querySelectorAll('img')).filter(function(im){
    if(!visible(im))return false;
@@ -964,7 +966,26 @@ function cards(d){try{
  }catch(e){return {error:String(e)};}}
 function hideNews(d){try{[].slice.call(d.querySelectorAll('h1,h2,h3,h4,h5,h6,strong,b,.title,.block-title')).forEach(function(h){var t=(h.innerText||'').trim().toLowerCase();if(t!=='обновления'&&t!=='новости')return;var n=h;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>120&&r.width<520&&r.height>80){n.classList.add(news);break;}}});}catch(e){}}
 function player(d){try{var ns=[].slice.call(d.querySelectorAll('video,iframe,object,embed,.jwplayer,.video-js,.plyr')).filter(visible);ns.forEach(function(el){var n=el;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>350&&r.height>150){n.classList.add(shell);break;}}});return ns.length;}catch(e){return 0;}}
-function apply(d){style(d);var c=cards(d);hideNews(d);var p=player(d);try{d.defaultView.__rfPremiumReport={path:d.location&&d.location.pathname,style:!!d.getElementById(sid),cards:c,players:p,ready:true};console.log('[RuFilmTV Premium]',JSON.stringify(d.defaultView.__rfPremiumReport));}catch(e){}}
+function controls(d){try{
+ var search=d.querySelector('input[type=search],input[placeholder*="Найти"],input[placeholder*="найти"],input[name=do]');
+ var searchCount=0;if(search){var form=search.closest('form')||search.parentElement;if(form){form.classList.add('rf-premium-search');searchCount=1;}}
+ var filterCount=0;[].slice.call(d.querySelectorAll('a,button,label,span,strong')).forEach(function(el){
+  var t=(el.innerText||el.textContent||'').trim().toLowerCase();if(!/^(категории|страна|жанры|год)$/.test(t))return;
+  var n=el;for(var k=0;k<4&&n&&n!==d.body;k++,n=n.parentElement){
+   var links=n.querySelectorAll('a,button').length,txt=(n.innerText||'').trim();
+   if(links>=2&&links<=45&&txt.length<1800){n.classList.add('rf-premium-filter-group');filterCount++;break;}
+  }
+ });
+ var introCount=0;[].slice.call(d.querySelectorAll('h1,h2,h3')).forEach(function(h){
+  var t=(h.innerText||'').trim().toLowerCase();if(!/популярные (сериалы|фильмы)|на сайте руфильм|смотреть .*онлайн/.test(t))return;
+  var n=h;for(var k=0;k<4&&n&&n!==d.body;k++,n=n.parentElement){
+   var txt=(n.innerText||'').trim(),imgs=n.querySelectorAll('img').length,paras=n.querySelectorAll('p').length;
+   if(txt.length>350&&txt.length<6500&&imgs===0&&paras>=1){n.classList.add('rf-premium-seo-intro');introCount++;break;}
+  }
+ });
+ return {search:searchCount,filterGroups:filterCount,seoIntro:introCount};
+ }catch(e){return {error:String(e)};}}
+function apply(d){style(d);var c=cards(d);hideNews(d);var p=player(d);var ui=controls(d);try{d.defaultView.__rfPremiumReport={path:d.location&&d.location.pathname,style:!!d.getElementById(sid),cards:c,players:p,ui:ui,ready:true};console.log('[RuFilmTV Premium]',JSON.stringify(d.defaultView.__rfPremiumReport));}catch(e){}}
 function run(){apply(document);var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{if(fs[i].contentDocument)apply(fs[i].contentDocument);}catch(e){}if(!fs[i].__rfPremiumBound){fs[i].__rfPremiumBound=true;fs[i].addEventListener('load',function(){try{apply(this.contentDocument);}catch(e){}});}}}
 run();
 if(!window.__rfPremiumObserver&&document.documentElement){var q=false;window.__rfPremiumObserver=new MutationObserver(function(){if(q)return;q=true;window.requestAnimationFrame(function(){q=false;run();});});window.__rfPremiumObserver.observe(document.documentElement,{childList:true,subtree:true});}
