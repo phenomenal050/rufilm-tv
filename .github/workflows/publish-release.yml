@@ -69,6 +69,7 @@ jobs:
         run: |
           APK="rufilm-tv-2.9/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+          test "$EXPECTED_TAG" = "v3.0.2" || { echo "Tag and Gradle version must be updated together"; exit 1; }
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep "name='tv.rufilm.app' versionCode='18' versionName='3.0.2'"
           apksigner verify --verbose --print-certs "$APK"
           mkdir -p "$RUNNER_TEMP/release"
