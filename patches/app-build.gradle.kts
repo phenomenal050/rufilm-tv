@@ -13,6 +13,12 @@ android {
     namespace = "tv.rufilm.app"
     compileSdk = 35
 
+    // This APK is distributed directly, not through Google Play. Keep targetSdk=28
+    // to preserve legacy WebView/TV behavior; suppress only the Play policy lint check.
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     defaultConfig {
         applicationId = "tv.rufilm.app"
         minSdk = 23
