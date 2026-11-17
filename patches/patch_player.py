@@ -213,7 +213,7 @@ if "installEpisodeSelectorSupport()" not in s:
         raise SystemExit("Could not find insertion point for episode selector support.")
     s = s.replace(anchor, episode_support + anchor, 1)
 
-if "MainActivity.this.installEpisodeSelectorSupport();" not in s:
+if "\n                MainActivity.this.installEpisodeSelectorSupport();\n" not in s:
     page_finished = re.search(
         r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
         s
@@ -885,7 +885,7 @@ if "private void installPremiumTopNavigation()" not in s:
         raise SystemExit("Java method insertion anchor missing")
     s = s.replace(nav_anchor, premium_nav + nav_anchor, 1)
 
-if "MainActivity.this.installPremiumTopNavigation();" not in s:
+if "\n                MainActivity.this.installPremiumTopNavigation();\n" not in s:
     page_finished = re.search(
         r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
         s
