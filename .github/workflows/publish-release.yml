@@ -17,10 +17,10 @@ jobs:
 
       - name: Validate and load persistent signing key
         env:
-          KEYSTORE_B64: \${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           test -n "$KEYSTORE_B64" || { echo "Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
           test -n "$KEYSTORE_PASSWORD" || { echo "Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
@@ -65,7 +65,7 @@ jobs:
 
       - name: Verify package, version, signature and SHA-256
         env:
-          EXPECTED_TAG: \${{ github.ref_name }}
+          EXPECTED_TAG: ${{ github.ref_name }}
         run: |
           APK="rufilm-tv-2.9/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
@@ -78,8 +78,8 @@ jobs:
 
       - name: Publish GitHub Release with APK and checksum
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-          TAG: \${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
           gh release create "$TAG" \
             "$RUNNER_TEMP/release/RuFilmTV-3.0.2.apk" \
