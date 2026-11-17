@@ -823,6 +823,36 @@ s = s.replace(
 s = s.replace("web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);",
               "web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);")
 
+
+# Add a compact app menu with the GitHub Release updater.
+once("private Button cleanButton, filterButton, playerButton;",
+     "private Button cleanButton, filterButton, playerButton, moreButton;",
+     "app menu button field")
+once('        Button search=button("⌕",true);',
+     '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        Button search=button("⌕",true);',
+     "app menu button")
+once("    private void showPlayerDialog() {",
+     '''    private void showAppMenu() {
+        String[] items = {"Проверить обновления", "Выбрать видеоплеер", "Обновить списки рекламы"};
+        new AlertDialog.Builder(this).setTitle("RuFilmTV").setItems(items, (dialog, which) -> {
+            if (which == 0) AppUpdateManager.check(MainActivity.this);
+            else if (which == 1) showPlayerDialog();
+            else updateFilterLists();
+        }).show();
+    }
+
+    private void showPlayerDialog() {''',
+     "GitHub updater menu")
+s = s.replace("showPlayerDialog(); return true;", "showAppMenu(); return true;")
+once("    @Override protected void onSaveInstanceState(Bundle out){",
+     '''    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        AppUpdateManager.onActivityResult(this, requestCode, resultCode);
+    }
+
+    @Override protected void onSaveInstanceState(Bundle out){''',
+     "updater installer result callback")
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
