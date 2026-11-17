@@ -1,4 +1,4 @@
-name: Build RuFilmTV 3.0.0 APK
+name: Build RuFilmTV 3.0.2 APK
 # Build workflow
 
 on:
@@ -47,9 +47,11 @@ jobs:
         run: |
           python3 -m pip install --quiet pillow cairosvg
           python3 patches/brand_tv.py
+          python3 patches/update_support.py
       - name: Apply verified Media3 compilation fixes
         run: |
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
+          install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
       - name: Build debug APK
@@ -57,6 +59,6 @@ jobs:
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: RuFilmTV-3.0.0-APK
+          name: RuFilmTV-3.0.2-APK
           path: rufilm-tv-2.9/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
