@@ -213,7 +213,8 @@ if "installEpisodeSelectorSupport()" not in s:
         raise SystemExit("Could not find insertion point for episode selector support.")
     s = s.replace(anchor, episode_support + anchor, 1)
 
-if "MainActivity.this.installEpisodeSelectorSupport();" not in s:
+if "MainActivity.this.installEpisodeSelectorSupport();
+                MainActivity.this.installPremiumTopNavigation();" not in s:
     page_finished = re.search(
         r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
         s
@@ -226,6 +227,39 @@ if "MainActivity.this.installEpisodeSelectorSupport();" not in s:
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
 
+
+
+# Apply a restrained premium skin to the site's REAL category navigation.
+# Existing anchors, hrefs, forms and event handlers are never replaced or intercepted.
+premium_nav = r'''
+    private void installPremiumTopNavigation() {
+        if (web == null) return;
+        final String js = "(function(){try{" +
+            "var paths={'/':'Главная','/films':'Фильмы','/serials':'Сериалы','/cartoon':'Мультфильмы','/tv-show':'ТВ-передачи','/trailers':'Трейлеры'};" +
+            "function apply(){var links=[].slice.call(document.querySelectorAll('a[href]')).filter(function(a){try{var u=new URL(a.href,location.href);return u.origin===location.origin&&Object.prototype.hasOwnProperty.call(paths,u.pathname.replace(/\\\\/$/,'')||'/');}catch(e){return false;}});" +
+            "if(links.length<4)return false;var roots=links.map(function(a){return a.closest('nav,header,.menu,.navigation,.nav,ul');}).filter(Boolean);" +
+            "var root=null;for(var i=0;i<roots.length;i++){if(links.every(function(a){return roots[i].contains(a); })){root=roots[i];break;}}" +
+            "if(!root)return false;root.classList.add('rufilm-premium-topnav');" +
+            "var list=root.tagName==='UL'?root:root.querySelector('ul');if(list)list.classList.add('rufilm-premium-topnav-list');" +
+            "links.forEach(function(a){a.classList.add('rufilm-premium-topnav-link');var li=a.closest('li');if(li)li.classList.add('rufilm-premium-topnav-item');});" +
+            "var current=location.pathname.replace(/\\\\/$/,'')||'/';links.forEach(function(a){try{var u=new URL(a.href,location.href);if((u.pathname.replace(/\\\\/$/,'')||'/')===current)a.setAttribute('aria-current','page');}catch(e){}});" +
+            "return true;}" +
+            "var styleId='rufilm-premium-topnav-style';if(!document.getElementById(styleId)){var st=document.createElement('style');st.id=styleId;" +
+            "st.textContent='.rufilm-premium-topnav{position:sticky!important;top:0!important;z-index:10000!important;background:rgba(17,19,22,.97)!important;border-bottom:1px solid rgba(255,255,255,.09)!important;padding:7px 14px!important;}' +" +
+            ".rufilm-premium-topnav-list{display:flex!important;align-items:center!important;gap:8px!important;flex-wrap:nowrap!important;overflow-x:auto!important;white-space:nowrap!important;scrollbar-width:none!important;margin:0!important;padding:0!important;}" +
+            "+'.rufilm-premium-topnav-list::-webkit-scrollbar{display:none!important;}' +" +
+            ".rufilm-premium-topnav-item{list-style:none!important;flex:0 0 auto!important;margin:0!important;padding:0!important;}" +
+            "+'.rufilm-premium-topnav-link{display:inline-flex!important;align-items:center!important;min-height:38px!important;padding:0 13px!important;border-radius:9px!important;color:#dedee2!important;text-decoration:none!important;font-size:14px!important;font-weight:600!important;outline-offset:3px!important;}' +" +
+            ".rufilm-premium-topnav-link:hover,.rufilm-premium-topnav-link:focus,.rufilm-premium-topnav-link[aria-current=page]{background:#d73445!important;color:#fff!important;}" +
+            "+'.rufilm-premium-topnav-link:focus{outline:2px solid #fff!important;}' +" +
+            "@media(max-width:700px){.rufilm-premium-topnav{padding:5px 8px!important;}.rufilm-premium-topnav-link{padding:0 9px!important;font-size:12px!important;}}';" +
+            "(document.head||document.documentElement).appendChild(st);}" +
+            "apply();if(!window.__rufilmPremiumNavObserver&&document.documentElement){var queued=false;window.__rufilmPremiumNavObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;apply();},180);});window.__rufilmPremiumNavObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}})();";
+        web.evaluateJavascript(js, null);
+    }
+
+'''
 
 # Expose the current activity for the native player's episode and clock callbacks.
 bridge_fields = '''
