@@ -878,17 +878,21 @@ once("    @Override protected void onSaveInstanceState(Bundle out){",
      "updater installer result callback")
 
 
-if ("private void installPremiumTopNavigation()" not in s) {
-    const navAnchor = "    // Capture HLS/DASH manifests and the request headers used by the WebView.";
-    if (!s.includes(navAnchor)) throw new Error("Java method insertion anchor missing");
-    s = s.replace(navAnchor, premium_nav + navAnchor, 1);
-}
-if (!s.includes("MainActivity.this.installPremiumTopNavigation();")) {
-    const pageFinished = s.match(/public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{/);
-    if (!pageFinished) throw new Error("onPageFinished anchor missing");
-    const pos = s.indexOf(pageFinished[0]) + pageFinished[0].length;
-    s = s.slice(0,pos) + "\n                MainActivity.this.installPremiumTopNavigation();" + s.slice(pos);
-}
+if "private void installPremiumTopNavigation()" not in s:
+    nav_anchor = "    // Capture HLS/DASH manifests and the request headers used by the WebView."
+    if nav_anchor not in s:
+        raise SystemExit("Java method insertion anchor missing")
+    s = s.replace(nav_anchor, premium_nav + nav_anchor, 1)
+
+if "MainActivity.this.installPremiumTopNavigation();" not in s:
+    page_finished = re.search(
+        r'(public\s+void\s+onPageFinished\s*\([^)]*\)\s*\{)',
+        s
+    )
+    if not page_finished:
+        raise SystemExit("onPageFinished anchor missing")
+    insert = page_finished.group(1) + "\n                MainActivity.this.installPremiumTopNavigation();"
+    s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
