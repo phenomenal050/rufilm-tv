@@ -77,8 +77,8 @@ jobs:
       - name: Resolve app version
         run: |
           set -euo pipefail
-          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\\([^"]*\\)".*/\\1/p' patches/app-build.gradle.kts | head -n 1)"
-          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \\([0-9][0-9]*\\).*/\\1/p' patches/app-build.gradle.kts | head -n 1)"
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' patches/app-build.gradle.kts | head -n 1)"
           test -n "$VERSION_NAME" && test -n "$VERSION_CODE"
           echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "APP_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
