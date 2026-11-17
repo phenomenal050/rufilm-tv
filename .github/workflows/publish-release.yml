@@ -1,6 +1,13 @@
 name: Publish RuFilmTV GitHub Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
+        required: true
+        default: "v3.0.2"
+        type: string
   push:
     tags:
       - "v*"
@@ -22,16 +29,39 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo "Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
-          test -n "$KEYSTORE_PASSWORD" || { echo "Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
-          test -n "$KEY_ALIAS" || { echo "Missing ANDROID_KEY_ALIAS"; exit 1; }
-          test -n "$KEY_PASSWORD" || { echo "Missing ANDROID_KEY_PASSWORD"; exit 1; }
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" || { echo "::error::Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "::error::Missing ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "::error::Missing ANDROID_KEY_PASSWORD"; exit 1; }
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rufilm-release.jks"
           test -s "$RUNNER_TEMP/rufilm-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/rufilm-release.jks" -storetype JKS -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/rufilm-release.jks" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "Persistent RuFilmTV signing key validated."
+
+      - name: Resolve and validate release version
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          TAG="$INPUT_TAG"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Release tag must look like v3.0.2"; exit 1; }
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' patches/app-build.gradle.kts | head -n 1)"
+          TAG_VERSION="${TAG#v}"
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE"
+          test "$TAG_VERSION" = "$VERSION_NAME" || {
+            echo "::error::Tag $TAG does not match Gradle versionName $VERSION_NAME"; exit 1;
+          }
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "RELEASE_APK_NAME=RuFilmTV-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+          echo "Publishing $TAG (versionCode $VERSION_CODE)."
 
       - name: Extract RuFilmTV project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
@@ -64,26 +94,25 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: Verify package, version, signature and SHA-256
-        env:
-          EXPECTED_TAG: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           APK="rufilm-tv-2.9/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          test "$EXPECTED_TAG" = "v3.0.2" || { echo "Tag and Gradle version must be updated together"; exit 1; }
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep "name='tv.rufilm.app' versionCode='18' versionName='3.0.2'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep -F "name='tv.rufilm.app' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           mkdir -p "$RUNNER_TEMP/release"
-          cp "$APK" "$RUNNER_TEMP/release/RuFilmTV-3.0.2.apk"
+          cp "$APK" "$RUNNER_TEMP/release/$RELEASE_APK_NAME"
           cd "$RUNNER_TEMP/release"
-          sha256sum RuFilmTV-3.0.2.apk > RuFilmTV-3.0.2.apk.sha256
+          sha256sum "$RELEASE_APK_NAME" > "$RELEASE_APK_NAME.sha256"
+          echo "Signed APK and SHA-256 sidecar are ready."
 
       - name: Publish GitHub Release with APK and checksum
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" \
-            "$RUNNER_TEMP/release/RuFilmTV-3.0.2.apk" \
-            "$RUNNER_TEMP/release/RuFilmTV-3.0.2.apk.sha256" \
-            --title "RuFilmTV $TAG" \
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
+            "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
+            --title "RuFilmTV $RELEASE_TAG" \
             --generate-notes
