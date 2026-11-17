@@ -1001,7 +1001,7 @@ if layout_call not in s:
 if "private void installPremiumLayout()" not in s:
     raise SystemExit("Premium layout method missing from generated MainActivity.java")
 nav_call = "                MainActivity.this.installPremiumTopNavigation();"
-if nav_call + "\\n" + layout_call not in s:
+if nav_call + "\n" + layout_call not in s:
     raise SystemExit("Premium layout call is not adjacent to the page-finished navigation hook")
 
 p.write_text(s, encoding="utf-8")
