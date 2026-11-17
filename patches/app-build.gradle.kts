@@ -22,8 +22,8 @@ android {
     lint {
         disable += "ExpiredTargetSdkVersion"
     }
-        versionCode = 22
-        versionName = "3.0.6"
+        versionCode = 23
+        versionName = "3.0.7"
     }
 
     if (hasStableSigning) {
