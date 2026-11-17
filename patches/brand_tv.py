@@ -51,7 +51,7 @@ for suffix, asset_name in [("", "banner_modern_light.b64"), ("-night", "banner_m
     if stale_png.exists():
         stale_png.unlink()
     (folder / "rufilm_tv_banner.webp").write_bytes(
-        base64.b64decode((Path("patches") / asset_name).read_text(encoding="ascii").strip())
+        (Path("patches") / asset_name).read_bytes()
     )
 
 # Manifest launcher metadata
