@@ -896,6 +896,85 @@ if "\n                MainActivity.this.installPremiumTopNavigation();\n" not in
     insert = page_finished.group(1) + "\n                MainActivity.this.installPremiumTopNavigation();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
+
+# Structure-aware Premium Cinema styling for the rendered site DOM.
+import base64 as _rf_base64
+premium_layout_js = r"""(function(){
+'use strict';
+var sid='rufilm-premium-layout-v1', card='rf-premium-card', grid='rf-premium-grid', news='rf-premium-news', shell='rf-premium-player-shell';
+var css = \`
+:root{color-scheme:dark!important;--rf-bg:#101114;--rf-panel:#191b20;--rf-panel2:#20232a;--rf-border:#30333b;--rf-text:#f1f1f3;--rf-muted:#a7a9b1;--rf-accent:#d73445}
+html,body{background:#101114!important;color:#f1f1f3!important;font-family:Inter,Roboto,Arial,sans-serif!important}
+body{font-size:16px!important;line-height:1.5!important;background-image:radial-gradient(ellipse at 50% -15%,rgba(215,52,69,.09),transparent 55%)!important}
+body,main,#content,.content,.main,.main-content,.site-content{color:#f1f1f3!important}
+header,.header,.site-header,.top,.topbar,.head,.header-inner{background:#14161a!important;color:#f1f1f3!important;border-color:#30333b!important}
+h1,h2,h3,h4,h5,h6{color:#f7f7f8!important} p,label,small,.muted{color:#c4c5cb!important}
+a,a:visited{color:#f06a77!important}
+button,input[type=submit],input[type=button],.btn,.button,select{background:#252830!important;color:#f7f7f8!important;border:1px solid #3a3d46!important;border-radius:9px!important;min-height:44px!important}
+input:not([type=checkbox]):not([type=radio]),textarea{background:#191b20!important;color:#f1f1f3!important;border:1px solid #3a3d46!important;border-radius:9px!important;min-height:44px!important}
+select option{background:#191b20!important;color:#f1f1f3!important}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:4px solid #e34a59!important;outline-offset:3px!important;box-shadow:0 0 0 3px rgba(215,52,69,.24)!important}
+.rufilm-premium-topnav{background:#14161a!important;border-bottom:1px solid #30333b!important}
+.rufilm-premium-topnav-link{min-height:46px!important;font-size:16px!important}
+.rf-premium-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:22px!important;align-items:start!important;width:100%!important}
+.rf-premium-card{min-width:0!important;max-width:none!important;background:#191b20!important;color:#f1f1f3!important;border:1px solid #30333b!important;border-radius:12px!important;overflow:hidden!important;box-shadow:0 5px 18px rgba(0,0,0,.25)!important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important}
+.rf-premium-card img{display:block!important;width:100%!important;max-width:100%!important;aspect-ratio:16/9!important;object-fit:cover!important;border-radius:0!important}
+.rf-premium-card a{color:#f5f5f6!important;text-decoration:none!important}
+.rf-premium-card:focus-within,.rf-premium-card:focus,.rf-premium-card:hover{border:2px solid #d73445!important;box-shadow:0 0 0 3px rgba(215,52,69,.22),0 12px 28px rgba(0,0,0,.4)!important;transform:scale(1.025)!important;z-index:5!important}
+.rf-premium-news{display:none!important}
+.rf-premium-player-shell{background:#191b20!important;border:1px solid #30333b!important;border-radius:14px!important;padding:14px!important;box-shadow:0 8px 28px rgba(0,0,0,.28)!important;color:#f1f1f3!important}
+.rf-premium-player-shell video,.rf-premium-player-shell iframe,.rf-premium-player-shell .jwplayer,.rf-premium-player-shell .video-js,.rf-premium-player-shell .plyr{border-radius:8px!important}
+.rf-premium-page h1,.rf-premium-page h2{border-left:4px solid #d73445!important;padding-left:12px!important}
+.rf-premium-page .pagination a,.rf-premium-page .pages a{background:#20232a!important;border:1px solid #343741!important;border-radius:8px!important;min-width:40px!important;min-height:40px!important}
+.rf-premium-page .active,.rf-premium-page .current{background:#d73445!important;color:#fff!important}
+.rf-premium-page hr{border-color:#30333b!important}
+@media(max-width:900px){.rf-premium-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important}}
+@media(max-width:560px){.rf-premium-grid{grid-template-columns:1fr!important}}
+\`;
+function visible(e){if(!e||!e.getBoundingClientRect)return false;var r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>100&&r.height>60&&s.display!=='none'&&s.visibility!=='hidden';}
+function style(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(sid);if(!st){st=d.createElement('style');st.id=sid;(d.head||d.documentElement).appendChild(st);}st.textContent=css;d.documentElement.classList.add('rf-premium-page');}catch(e){}}
+function cards(d){try{
+ var imgs=[].slice.call(d.querySelectorAll('img')).filter(function(im){if(!visible(im))return false;var r=im.getBoundingClientRect();return r.width>=110&&r.height>=65&&r.width/r.height>1.15&&r.width/r.height<2.5;});
+ var list=[];
+ imgs.forEach(function(im){var node=im.closest('a[href]')||im,best=null;
+  for(var k=0;node&&k<5;k++,node=node.parentElement){var r=node.getBoundingClientRect(),t=(node.innerText||'').trim(),n=node.querySelectorAll('img').length;if(r.width>=110&&r.width<=650&&r.height>=100&&n<=2&&t.length>=3&&t.length<700)best=node;if(node===d.body)break;}
+  if(best&&!list.includes(best)){best.classList.add(card);best.setAttribute('tabindex','0');list.push(best);}
+ });
+ if(list.length<3)return {cards:list.length,grid:false};
+ var p=list[0].parentElement,found=null;
+ while(p&&p!==d.body){if(list.every(function(c){return p.contains(c);})){found=p;break;}p=p.parentElement;}
+ if(found){for(var depth=0;depth<3&&found&&found!==d.body;depth++){var n=[].filter.call(found.children,function(ch){return list.some(function(c){return ch===c||ch.contains(c);});}).length;if(n>=3)break;found=found.parentElement;}if(found)found.classList.add(grid);}
+ return {cards:list.length,grid:!!found};
+ }catch(e){return {error:String(e)};}}
+function hideNews(d){try{[].slice.call(d.querySelectorAll('h1,h2,h3,h4,h5,h6,strong,b,.title,.block-title')).forEach(function(h){var t=(h.innerText||'').trim().toLowerCase();if(t!=='обновления'&&t!=='новости')return;var n=h;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>120&&r.width<520&&r.height>80){n.classList.add(news);break;}}});}catch(e){}}
+function player(d){try{var ns=[].slice.call(d.querySelectorAll('video,iframe,object,embed,.jwplayer,.video-js,.plyr')).filter(visible);ns.forEach(function(el){var n=el;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>350&&r.height>150){n.classList.add(shell);break;}}});return ns.length;}catch(e){return 0;}}
+function apply(d){style(d);var c=cards(d);hideNews(d);var p=player(d);try{console.log('[RuFilmTV Premium]',JSON.stringify({path:d.location&&d.location.pathname,cards:c,players:p,style:!!d.getElementById(sid)}));}catch(e){}}
+function run(){apply(document);var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{if(fs[i].contentDocument)apply(fs[i].contentDocument);}catch(e){}if(!fs[i].__rfPremiumBound){fs[i].__rfPremiumBound=true;fs[i].addEventListener('load',function(){try{apply(this.contentDocument);}catch(e){}});}}}
+run();
+if(!window.__rfPremiumObserver&&document.documentElement){var q=false;window.__rfPremiumObserver=new MutationObserver(function(){if(q)return;q=true;window.requestAnimationFrame(function(){q=false;run();});});window.__rfPremiumObserver.observe(document.documentElement,{childList:true,subtree:true});}
+if(!window.__rfPremiumHistoryHook){window.__rfPremiumHistoryHook=true;['pushState','replaceState'].forEach(function(k){var old=history[k];history[k]=function(){var r=old.apply(this,arguments);setTimeout(run,80);return r;};});window.addEventListener('popstate',function(){setTimeout(run,80);});}
+return 'premium-layout-installed';
+})();""";
+_rf_encoded = _rf_base64.b64encode(premium_layout_js.encode("utf-8")).decode("ascii")
+premium_layout_method = '''
+    private void installPremiumLayout() {
+        if (web == null) return;
+        final String encoded = "''' + _rf_encoded + '''";
+        final String script = new String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT), java.nio.charset.StandardCharsets.UTF_8);
+        web.evaluateJavascript(script, value -> android.util.Log.i("RuFilmTVTheme", "Premium layout: " + value));
+    }
+
+'''
+if "private void installPremiumLayout()" not in s:
+    anchor = "    // Capture HLS/DASH manifests and the request headers used by the WebView."
+    if anchor not in s: raise SystemExit("Could not find Java insertion point for Premium layout.")
+    s = s.replace(anchor, premium_layout_method + anchor, 1)
+layout_call = "                MainActivity.this.installPremiumLayout();"
+if layout_call not in s:
+    nav_call = "                MainActivity.this.installPremiumTopNavigation();"
+    if nav_call not in s: raise SystemExit("Could not find premium navigation call in onPageFinished.")
+    s = s.replace(nav_call, nav_call + "\n" + layout_call, 1)
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
