@@ -902,7 +902,7 @@ import base64 as _rf_base64
 premium_layout_js = r"""(function(){
 'use strict';
 var sid='rufilm-premium-layout-v1', card='rf-premium-card', grid='rf-premium-grid', news='rf-premium-news', shell='rf-premium-player-shell';
-var css = \`
+var css = `
 :root{color-scheme:dark!important;--rf-bg:#101114;--rf-panel:#191b20;--rf-panel2:#20232a;--rf-border:#30333b;--rf-text:#f1f1f3;--rf-muted:#a7a9b1;--rf-accent:#d73445}
 html,body{background:#101114!important;color:#f1f1f3!important;font-family:Inter,Roboto,Arial,sans-serif!important}
 body{font-size:16px!important;line-height:1.5!important;background-image:radial-gradient(ellipse at 50% -15%,rgba(215,52,69,.09),transparent 55%)!important}
@@ -930,7 +930,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .rf-premium-page hr{border-color:#30333b!important}
 @media(max-width:900px){.rf-premium-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important}}
 @media(max-width:560px){.rf-premium-grid{grid-template-columns:1fr!important}}
-\`;
+`;
 function visible(e){if(!e||!e.getBoundingClientRect)return false;var r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>100&&r.height>60&&s.display!=='none'&&s.visibility!=='hidden';}
 function style(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(sid);if(!st){st=d.createElement('style');st.id=sid;(d.head||d.documentElement).appendChild(st);}st.textContent=css;d.documentElement.classList.add('rf-premium-page');}catch(e){}}
 function cards(d){try{
@@ -971,6 +971,11 @@ if(!window.__rfPremiumObserver&&document.documentElement){var q=false;window.__r
 if(!window.__rfPremiumHistoryHook){window.__rfPremiumHistoryHook=true;['pushState','replaceState'].forEach(function(k){var old=history[k];history[k]=function(){var r=old.apply(this,arguments);setTimeout(run,80);return r;};});window.addEventListener('popstate',function(){setTimeout(run,80);});}
 return JSON.stringify(window.__rfPremiumReport||{ready:false,reason:'report-missing'});
 })();""";
+# Syntax-check the exact JavaScript before embedding it in the APK.
+import subprocess as _rf_subprocess
+_rf_js_check = _rf_subprocess.run(["node", "--check"], input=premium_layout_js, text=True, capture_output=True)
+if _rf_js_check.returncode != 0:
+    raise SystemExit("Premium layout JavaScript syntax error: " + _rf_js_check.stderr)
 _rf_encoded = _rf_base64.b64encode(premium_layout_js.encode("utf-8")).decode("ascii")
 premium_layout_method = '''
     private void installPremiumLayout() {
