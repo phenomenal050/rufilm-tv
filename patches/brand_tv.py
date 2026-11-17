@@ -37,7 +37,7 @@ colors=res/"values/colors.xml";colors.parent.mkdir(parents=True,exist_ok=True)
 old=colors.read_text(encoding="utf-8") if colors.exists() else "<resources></resources>"
 import re
 old=re.sub(r'<color name="rufilm_icon_background">.*?</color>','',old)
-old=old.replace("</resources>",'<color name="rufilm_icon_background">#f5e3c9</color></resources>')
+old=old.replace("</resources>",'<color name="rufilm_icon_background">#f5e3c9</color><color name="rufilm_icon_background_night">#171719</color></resources>')
 colors.write_text(old,encoding="utf-8")
 night=res/"values-night/colors.xml";night.parent.mkdir(parents=True,exist_ok=True)
 night.write_text('<resources><color name="rufilm_icon_background_night">#171719</color></resources>',encoding="utf-8")
