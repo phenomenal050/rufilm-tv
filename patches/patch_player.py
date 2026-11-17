@@ -916,7 +916,7 @@ select option{background:#191b20!important;color:#f1f1f3!important}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:4px solid #e34a59!important;outline-offset:3px!important;box-shadow:0 0 0 3px rgba(215,52,69,.24)!important}
 .rufilm-premium-topnav{background:#14161a!important;border-bottom:1px solid #30333b!important}
 .rufilm-premium-topnav-link{min-height:46px!important;font-size:16px!important}
-.rf-premium-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:22px!important;align-items:start!important;width:100%!important}
+.rf-premium-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:22px!important;align-items:start!important;width:100%!important}.rf-premium-grid>.rf-premium-grid-item{width:auto!important;max-width:none!important;min-width:0!important;flex:none!important;margin:0!important;float:none!important}
 .rf-premium-card{min-width:0!important;max-width:none!important;background:#191b20!important;color:#f1f1f3!important;border:1px solid #30333b!important;border-radius:12px!important;overflow:hidden!important;box-shadow:0 5px 18px rgba(0,0,0,.25)!important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important}
 .rf-premium-card img{display:block!important;width:100%!important;max-width:100%!important;aspect-ratio:16/9!important;object-fit:cover!important;border-radius:0!important}
 .rf-premium-card a{color:#f5f5f6!important;text-decoration:none!important}
@@ -934,26 +934,42 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 function visible(e){if(!e||!e.getBoundingClientRect)return false;var r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>100&&r.height>60&&s.display!=='none'&&s.visibility!=='hidden';}
 function style(d){try{if(!d||!d.documentElement)return;var st=d.getElementById(sid);if(!st){st=d.createElement('style');st.id=sid;(d.head||d.documentElement).appendChild(st);}st.textContent=css;d.documentElement.classList.add('rf-premium-page');}catch(e){}}
 function cards(d){try{
- var imgs=[].slice.call(d.querySelectorAll('img')).filter(function(im){if(!visible(im))return false;var r=im.getBoundingClientRect();return r.width>=110&&r.height>=65&&r.width/r.height>1.15&&r.width/r.height<2.5;});
- var list=[];
- imgs.forEach(function(im){var node=im.closest('a[href]')||im,best=null;
-  for(var k=0;node&&k<5;k++,node=node.parentElement){var r=node.getBoundingClientRect(),t=(node.innerText||'').trim(),n=node.querySelectorAll('img').length;if(r.width>=110&&r.width<=650&&r.height>=100&&n<=2&&t.length>=3&&t.length<700)best=node;if(node===d.body)break;}
-  if(best&&!list.includes(best)){best.classList.add(card);best.setAttribute('tabindex','0');list.push(best);}
+ var imgs=[].slice.call(d.querySelectorAll('img')).filter(function(im){
+   if(!visible(im))return false;
+   var r=im.getBoundingClientRect();
+   return r.width>=170&&r.height>=90&&r.width/r.height>1.15&&r.width/r.height<2.5;
  });
- if(list.length<3)return {cards:list.length,grid:false};
- var p=list[0].parentElement,found=null;
- while(p&&p!==d.body){if(list.every(function(c){return p.contains(c);})){found=p;break;}p=p.parentElement;}
- if(found){for(var depth=0;depth<3&&found&&found!==d.body;depth++){var n=[].filter.call(found.children,function(ch){return list.some(function(c){return ch===c||ch.contains(c);});}).length;if(n>=3)break;found=found.parentElement;}if(found)found.classList.add(grid);}
- return {cards:list.length,grid:!!found};
+ var list=[];
+ imgs.forEach(function(im){
+   var node=im,best=null,bestArea=Infinity;
+   for(var k=0;node&&k<7;k++,node=node.parentElement){
+     var r=node.getBoundingClientRect(),t=(node.innerText||'').replace(/\\s+/g,' ').trim(),n=node.querySelectorAll('img').length;
+     var eligible=r.width>=170&&r.width<=680&&r.height>=100&&r.height<=560&&n>=1&&n<=2&&t.length>=3&&t.length<=360;
+     if(eligible){var area=r.width*r.height;if(area<bestArea){best=node;bestArea=area;}}
+     if(node===d.body)break;
+   }
+   if(best&&!list.includes(best)){best.classList.add(card);best.setAttribute('tabindex','0');list.push(best);}
+ });
+ if(list.length<3)return {cards:list.length,grid:false,reason:'fewer-than-three-cards'};
+ var ancestor=list[0].parentElement,found=null,items=[];
+ while(ancestor&&ancestor!==d.body){
+   var direct=[].filter.call(ancestor.children,function(ch){return list.some(function(c){return ch===c||ch.contains(c);});});
+   if(direct.length>=3&&direct.length===list.length){found=ancestor;items=direct;break;}
+   ancestor=ancestor.parentElement;
+ }
+ if(!found)return {cards:list.length,grid:false,reason:'no-common-card-row'};
+ found.classList.add(grid);
+ items.forEach(function(item){item.classList.add('rf-premium-grid-item');});
+ return {cards:list.length,grid:true,items:items.length,container:found.tagName+'.'+String(found.className||'').toString().slice(0,100)};
  }catch(e){return {error:String(e)};}}
 function hideNews(d){try{[].slice.call(d.querySelectorAll('h1,h2,h3,h4,h5,h6,strong,b,.title,.block-title')).forEach(function(h){var t=(h.innerText||'').trim().toLowerCase();if(t!=='обновления'&&t!=='новости')return;var n=h;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>120&&r.width<520&&r.height>80){n.classList.add(news);break;}}});}catch(e){}}
 function player(d){try{var ns=[].slice.call(d.querySelectorAll('video,iframe,object,embed,.jwplayer,.video-js,.plyr')).filter(visible);ns.forEach(function(el){var n=el;for(var i=0;i<5&&n&&n!==d.body;i++,n=n.parentElement){var r=n.getBoundingClientRect();if(r.width>350&&r.height>150){n.classList.add(shell);break;}}});return ns.length;}catch(e){return 0;}}
-function apply(d){style(d);var c=cards(d);hideNews(d);var p=player(d);try{console.log('[RuFilmTV Premium]',JSON.stringify({path:d.location&&d.location.pathname,cards:c,players:p,style:!!d.getElementById(sid)}));}catch(e){}}
+function apply(d){style(d);var c=cards(d);hideNews(d);var p=player(d);try{d.defaultView.__rfPremiumReport={path:d.location&&d.location.pathname,style:!!d.getElementById(sid),cards:c,players:p,ready:true};console.log('[RuFilmTV Premium]',JSON.stringify(d.defaultView.__rfPremiumReport));}catch(e){}}
 function run(){apply(document);var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){try{if(fs[i].contentDocument)apply(fs[i].contentDocument);}catch(e){}if(!fs[i].__rfPremiumBound){fs[i].__rfPremiumBound=true;fs[i].addEventListener('load',function(){try{apply(this.contentDocument);}catch(e){}});}}}
 run();
 if(!window.__rfPremiumObserver&&document.documentElement){var q=false;window.__rfPremiumObserver=new MutationObserver(function(){if(q)return;q=true;window.requestAnimationFrame(function(){q=false;run();});});window.__rfPremiumObserver.observe(document.documentElement,{childList:true,subtree:true});}
 if(!window.__rfPremiumHistoryHook){window.__rfPremiumHistoryHook=true;['pushState','replaceState'].forEach(function(k){var old=history[k];history[k]=function(){var r=old.apply(this,arguments);setTimeout(run,80);return r;};});window.addEventListener('popstate',function(){setTimeout(run,80);});}
-return 'premium-layout-installed';
+return JSON.stringify(window.__rfPremiumReport||{ready:false,reason:'report-missing'});
 })();""";
 _rf_encoded = _rf_base64.b64encode(premium_layout_js.encode("utf-8")).decode("ascii")
 premium_layout_method = '''
@@ -974,6 +990,13 @@ if layout_call not in s:
     nav_call = "                MainActivity.this.installPremiumTopNavigation();"
     if nav_call not in s: raise SystemExit("Could not find premium navigation call in onPageFinished.")
     s = s.replace(nav_call, nav_call + "\n" + layout_call, 1)
+
+# Fail the build if the generated Java source lacks the layout method or call.
+# Here s is the generated MainActivity.java content, not this patcher source.
+if "private void installPremiumLayout()" not in s:
+    raise SystemExit("Premium layout method missing from generated MainActivity.java")
+if not re.search(r"onPageFinished\\s*\\([^)]*\\)[^{]*\\{[\\s\\S]{0,1200}MainActivity\\.this\\.installPremiumLayout\\(\\);", s):
+    raise SystemExit("Premium layout call missing from generated onPageFinished")
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
