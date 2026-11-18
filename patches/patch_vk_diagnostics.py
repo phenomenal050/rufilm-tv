@@ -108,7 +108,7 @@ if old_intercept in source:
 else:
     patched_filter = '''                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();'''
-    patched_with_log = '''                boolean blocked = request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
+    patched_with_log = '''                boolean blocked = isAdFilteringEnabled() && request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
                 logVkRequest(request, blocked);
                 if (blocked) return emptyBlockedResponse();'''
     replace_once(patched_filter, patched_with_log, "patched request interception diagnostics")
@@ -120,7 +120,7 @@ old_legacy = '''            @SuppressWarnings("deprecation")
             }'''
 new_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
-                boolean blocked = isAdRequest(url);
+                boolean blocked = isAdFilteringEnabled() && isAdRequest(url);
                 logVkUrl(url, "GET", blocked, "legacy-api");
                 if (blocked) return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, url);
