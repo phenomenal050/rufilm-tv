@@ -62,7 +62,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (web == null) return;
         final String script = "(function(){try{var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}" +
             "function bind(d){if(!d||d.__rufilmFirstTapInstalled)return;d.__rufilmFirstTapInstalled=true;" +
-            "function arm(v){if(!v||v.__rufilmFirstTapBound)return;v.__rufilmFirstTapBound=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');" +
+            "function arm(v){if(!v||v.__rufilmFirstTapBound)return;v.__rufilmFirstTapBound=true;" +
             "function start(){if(!v.__rufilmPlayIntentUntil||Date.now()>v.__rufilmPlayIntentUntil||!v.paused||v.readyState<2||!v.currentSrc)return;try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}}" +
             "['loadeddata','canplay','canplaythrough','loadedmetadata'].forEach(function(n){v.addEventListener(n,start);});" +
             "d.addEventListener('click',function(e){var t=e.target,hit=t===v||v.contains(t);if(!hit){var el=t&&t.closest?t.closest('button,[role=button],[class*=play],[aria-label*=play i],[title*=play i]'):null;" +
