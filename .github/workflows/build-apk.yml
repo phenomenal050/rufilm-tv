@@ -86,6 +86,9 @@ jobs:
           grep -F 'isAdFilteringEnabled() && request != null' "$SRC"
           grep -F 'isAdFilteringEnabled() && isAdRequest(url)' "$SRC"
           grep -F 'rf-no-adfilter' "$SRC"
+          grep -F "classList.toggle('rf-no-adfilter'" "$SRC"
+          grep -F 'captureMediaRequest(request);' "$SRC"
+          grep -F '!isRuFilmMediaRequest(url)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
             echo "::error::Found an unconditional diagnostic ad-blocking path."
