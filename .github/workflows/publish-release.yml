@@ -115,5 +115,5 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
-            --title "RuFilmTV $RELEASE_TAG" \
-            --generate-notes
+            --title "RuFilmTV $RELEASE_TAG — VK diagnostics" \
+            --notes "Публичная диагностическая сборка RuFilmTV. Добавлены журналы сетевых запросов VK, ошибок загрузки, HTTP, SSL и JavaScript. Рекламная фильтрация сохранена. Это диагностический выпуск для сбора данных о проблемах воспроизведения; после проверки будет выпущена обычная стабильная версия."
