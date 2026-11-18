@@ -104,6 +104,9 @@ jobs:
           grep -F '!isRuFilmMediaRequest(url)' "$SRC"
           grep -F 'vkHost' "$SRC"
           grep -F 'setMediaPlaybackRequiresUserGesture(false)' "$SRC"
+          grep -F 'Restore original VK playback at ' "$SRC"
+          grep -F 'w.__rufilmActiveVideo=v' patches/patch_player.py
+          grep -F "v.addEventListener('seeked',finishSeek" patches/patch_player.py
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
             echo "::error::Found an unconditional diagnostic ad-blocking path."
