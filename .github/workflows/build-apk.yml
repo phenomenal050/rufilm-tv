@@ -88,6 +88,8 @@ jobs:
           grep -F 'rf-no-adfilter' "$SRC"
           grep -F "classList.toggle('rf-no-adfilter'" "$SRC"
           grep -F 'captureMediaRequest(request);' "$SRC"
+          grep -F 'Fullscreen handoff requested: native player' "$SRC"
+          grep -F 'fallbackToOriginalScheduled' patches/NativePlayerActivity.java
           grep -F '!isRuFilmMediaRequest(url)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
