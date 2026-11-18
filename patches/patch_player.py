@@ -40,11 +40,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             h.equals("ok.ru") || h.endsWith(".ok.ru") ||
             h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru") ||
             h.equals("userapi.com") || h.endsWith(".userapi.com");
-        if (vkHost && (path.startsWith("/video") || path.startsWith("/web-api/") ||
-                path.startsWith("/videoembed/") || path.startsWith("/video_ext") ||
-                path.startsWith("/al_video") || path.startsWith("/js/") ||
-                path.startsWith("/res/") || path.startsWith("/api/") ||
-                path.startsWith("/embed/"))) return true;
+        if (vkHost) return true; // Preserve all first-party player bootstrap/API assets on VK/OK hosts.
         if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") ||
                 h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru") ||
                 h.endsWith(".vk-cdn.net") || h.endsWith(".vkuseraudio.net")) return true;
@@ -81,7 +77,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             ";var st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}st.textContent=css;" +
             "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],.ads,.ad,.ad-box,.ad-wrapper,.adblock,[id^=ad_],[class^=ad_],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication]';" +
             "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;var n=((e.id||'')+' '+(typeof e.className==='string'?e.className:'')).toLowerCase();if(!/(^|[-_\\s])(ad|ads|advert|banner|sponsor)([-_\\s]|$)/.test(n)&&!/(advert|ad-container|ad-slot|banner-ad|sponsor)/.test(n))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});}" +
-            "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
+            "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(js, null);
     }
