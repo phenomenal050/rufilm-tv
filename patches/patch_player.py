@@ -967,6 +967,41 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
     insert = page_finished.group(1) + "\n                MainActivity.this.installPremiumTopNavigation();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
+
+# FINAL GUARDED AD-FILTER AND MEDIA-CAPTURE WIRING
+# Apply after every other transformation so later insertions cannot undo these guards.
+import re as _final_re
+_apply = '''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");})();",null);
+        if(cleanButton!=null){
+            cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
+            cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
+        }
+    }'''
+pc, _n = _final_re.subn(r'    private void applyCleanMode\(\)\s*\{.*?\n    \}', _apply, pc, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce ad-filter CSS toggle in applyCleanMode")
+_modern = r'''(@Override public WebResourceResponse shouldInterceptRequest\(WebView view, WebResourceRequest request\)\s*\{).*?(return super\.shouldInterceptRequest\(view, request\);\s*\})'''
+_modern_body = r'''\1
+                captureMediaRequest(request);
+                boolean blocked = isAdFilteringEnabled() && request != null &&
+                    isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
+                logVkRequest(request, blocked);
+                if (blocked) return emptyBlockedResponse();
+                \2'''
+pc, _n = _final_re.subn(_modern, _modern_body, pc, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce modern WebView interception and manifest capture")
+_legacy = r'''(@SuppressWarnings\("deprecation"\)\s*@Override public WebResourceResponse shouldInterceptRequest\(WebView view, String url\)\s*\{).*?(return super\.shouldInterceptRequest\(view, url\);\s*\})'''
+_legacy_body = r'''\1
+                boolean blocked = isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url);
+                logVkUrl(url, "GET", blocked, "legacy-api");
+                if (blocked) return emptyBlockedResponse();
+                \2'''
+pc, _n = _final_re.subn(_legacy, _legacy_body, pc, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce legacy WebView interception guard")
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
