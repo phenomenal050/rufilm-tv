@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.14"
+        default: "v3.0.15-beta.1"
         type: string
   push:
     tags:
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Release tag must look like v3.0.2"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]] || { echo "::error::Test tag must look like v3.0.15-beta.1"; exit 1; }
           VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' patches/app-build.gradle.kts | head -n 1)"
           TAG_VERSION="${TAG#v}"
@@ -88,6 +88,7 @@ jobs:
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
 
       - name: Build signed release APK
         working-directory: rufilm-tv-2.9
@@ -114,5 +115,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
-            --title "RuFilmTV $RELEASE_TAG" \
-            --generate-notes
+            --title "RuFilmTV $RELEASE_TAG — публичная тестовая сборка VK" \
+            --notes "Публичная тестовая сборка RuFilmTV для пользователей, которые добровольно выбрали тестовый канал в обновляторе. Включена диагностика встроенного VK-плеера: запросы, блокировки, ошибки загрузки, HTTP, SSL и JavaScript. Cookies и токены в диагностические записи не включаются. Рекламная фильтрация сохранена. Это предварительная версия; после проверки будет опубликована стабильная сборка." \
+            --prerelease \
+            --target "$GITHUB_SHA"
