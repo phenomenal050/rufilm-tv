@@ -144,7 +144,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 '''
 once(anchor, capture+anchor, "capture methods")
 
-once('''                if (request != null && isAdRequest(request.getUrl().toString()))
+once('''                captureMediaRequest(request);
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', '''                captureMediaRequest(request);
                 if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', "request interception")
@@ -726,6 +729,38 @@ methods = r"""
 """
 if "private void showThemeDialog()" not in s:
     s = s.replace("    private void updateFilterLists(){", methods + "\n    private void updateFilterLists(){")
+
+// User-controlled master switch for network ad filtering. Enabled by default.
+if ("private boolean isAdFilteringEnabled()" not in s:
+    ad_filter_controls = r"""
+    private boolean isAdFilteringEnabled() {
+        return prefs == null || prefs.getBoolean("ad_filters_enabled", true);
+    }
+
+    private void showAdFilterDialog() {
+        boolean enabled = isAdFilteringEnabled();
+        String[] choices = {"Включить блокировку рекламы", "Отключить фильтры рекламы"};
+        new AlertDialog.Builder(this)
+            .setTitle("Фильтры рекламы")
+            .setMessage("При отключении сетевые фильтры рекламы перестанут блокировать запросы. Это удобно для диагностики видеоплеера VK. Защита будет включена снова вручную.")
+            .setSingleChoiceItems(choices, enabled ? 0 : 1, (dialog, which) -> {
+                boolean turnOn = which == 0;
+                prefs.edit().putBoolean("ad_filters_enabled", turnOn).apply();
+                dialog.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Фильтры рекламы")
+                    .setMessage(turnOn ? "Блокировка рекламы включена." : "Фильтры рекламы отключены. Перезапустите страницу с видео для чистого теста.")
+                    .setPositiveButton("Понятно", null)
+                    .show();
+            })
+            .setNegativeButton("Закрыть", null)
+            .show();
+    }
+"""
+    anchor = "    private void updateFilterLists(){"
+    if anchor not in s: raise SystemExit("Ad-filter dialog insertion anchor missing")
+    s = s.replace(anchor, ad_filter_controls + "\n" + anchor, 1)
+
 s=s.replace('''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setOnHoverListener((v, event) -> {''', '''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
@@ -866,7 +901,7 @@ once("    private void showPlayerDialog() {",
         new AlertDialog.Builder(this).setTitle("Ещё").setItems(items, (dialog, which) -> {
             if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
             else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
-            else if (which == 2) { if (filterButton != null) filterButton.performClick(); }
+            else if (which == 2) showAdFilterDialog();
             else if (which == 3) showPlayerDialog();
             else if (which == 4) AppUpdateManager.check(MainActivity.this);
             else if (which == 5) updateFilterLists();
