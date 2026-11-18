@@ -47,6 +47,7 @@ public class NativePlayerActivity extends Activity {
     public static final String EXTRA_START_POSITION_MS = "start_position_ms";
 
     private ExoPlayer player;
+    private boolean fallbackToOriginalScheduled;
     private PlayerView playerView;
     private DefaultTrackSelector trackSelector;
     private Button qualityButton;
@@ -324,6 +325,17 @@ public class NativePlayerActivity extends Activity {
                 }
                 android.util.Log.e("RuFilmTV", "Media3 playback failed: " + error.getMessage(), error);
                 Toast.makeText(NativePlayerActivity.this, detail, Toast.LENGTH_LONG).show();
+                // A failed native handoff must never strand the viewer on a black screen.
+                // Return to MainActivity, which restores and resumes the original HTML5 player.
+                if (!fallbackToOriginalScheduled) {
+                    fallbackToOriginalScheduled = true;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        if (!isFinishing()) {
+                            android.util.Log.w("RuFilmTV", "Native playback failed; returning to original WebView player");
+                            finish();
+                        }
+                    }, 2200L);
+                }
             }
             @Override public void onTracksChanged(androidx.media3.common.Tracks tracks) {
                 if (qualityButton != null) qualityButton.setEnabled(hasVideoTracks());
