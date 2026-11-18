@@ -137,12 +137,17 @@ public final class AppUpdateManager {
             if (testChannel) {
                 JSONArray releases = new JSONArray(response);
                 json = null;
+                String newestPublishedAt = "";
                 for (int i = 0; i < releases.length(); i++) {
                     JSONObject candidate = releases.optJSONObject(i);
-                    if (candidate != null && candidate.optBoolean("prerelease", false) &&
-                        !candidate.optBoolean("draft", false)) {
+                    if (candidate == null || !candidate.optBoolean("prerelease", false) ||
+                        candidate.optBoolean("draft", false)) {
+                        continue;
+                    }
+                    String publishedAt = candidate.optString("published_at", "");
+                    if (publishedAt.compareTo(newestPublishedAt) > 0) {
+                        newestPublishedAt = publishedAt;
                         json = candidate;
-                        break;
                     }
                 }
                 if (json == null) throw new NoReleaseException();
