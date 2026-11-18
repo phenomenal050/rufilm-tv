@@ -226,6 +226,41 @@ if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActi
     insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
+
+# Wire the filter toggle into the existing visible filter button and every ad-filter path.
+s = s.replace('''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
+                if (request != null && isAdRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, request);
+            }''', '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
+                captureMediaRequest(request);
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, request);
+            }''', 1)
+s = s.replace('''            @SuppressWarnings("deprecation")
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
+                if (isAdRequest(url)) return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, url);
+            }''', '''            @SuppressWarnings("deprecation")
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
+                if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, url);
+            }''', 1)
+s = s.replace('filterButton.setOnClickListener(v->updateFilterLists());',
+              'filterButton.setOnClickListener(v->showAdFilterDialog());', 1)
+s = s.replace('String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",',
+              'String[] items = {"Чистый", "Цвет", "Фильтры рекламы", "Видеоплеер",', 1)
+s = s.replace('''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("document.documentElement.classList.toggle('rf-clean',"+cleanMode+");",null);
+    }''', '''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("(function(){document.documentElement.classList.toggle('rf-clean',"+cleanMode+");document.documentElement.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");})();",null);
+    }''', 1)
+s = s.replace('html.rf-clean', 'html.rf-clean:not(.rf-no-adfilter)')
+
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
 
@@ -742,16 +777,11 @@ if "private boolean isAdFilteringEnabled()" not in s:
         String[] choices = {"Включить блокировку рекламы", "Отключить фильтры рекламы"};
         new AlertDialog.Builder(this)
             .setTitle("Фильтры рекламы")
-            .setMessage("При отключении сетевые фильтры рекламы перестанут блокировать запросы. Это удобно для диагностики видеоплеера VK. Защита будет включена снова вручную.")
-            .setSingleChoiceItems(choices, enabled ? 0 : 1, (dialog, which) -> {
+            .setItems(choices, (dialog, which) -> {
                 boolean turnOn = which == 0;
-                prefs.edit().putBoolean("ad_filters_enabled", turnOn).apply();
-                dialog.dismiss();
-                new AlertDialog.Builder(this)
-                    .setTitle("Фильтры рекламы")
-                    .setMessage(turnOn ? "Блокировка рекламы включена." : "Фильтры рекламы отключены. Перезапустите страницу с видео для чистого теста.")
-                    .setPositiveButton("Понятно", null)
-                    .show();
+                if (prefs != null) prefs.edit().putBoolean("ad_filters_enabled", turnOn).apply();
+                applyCleanMode();
+                Toast.makeText(this, turnOn ? "Блокировка рекламы включена" : "Фильтры рекламы отключены", Toast.LENGTH_LONG).show();
             })
             .setNegativeButton("Закрыть", null)
             .show();
