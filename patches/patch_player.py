@@ -978,7 +978,7 @@ _apply = '''    private void applyCleanMode(){
             cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
         }
     }'''
-pc, _n = _final_re.subn(r'    private void applyCleanMode\(\)\s*\{.*?\n    \}', _apply, pc, count=1, flags=_final_re.S)
+s, _n = _final_re.subn(r'    private void applyCleanMode\(\)\s*\{.*?\n    \}', _apply, s, count=1, flags=_final_re.S)
 if _n != 1:
     raise SystemExit("Could not enforce ad-filter CSS toggle in applyCleanMode")
 _modern = r'''(@Override public WebResourceResponse shouldInterceptRequest\(WebView view, WebResourceRequest request\)\s*\{).*?(return super\.shouldInterceptRequest\(view, request\);\s*\})'''
@@ -989,7 +989,7 @@ _modern_body = r'''\1
                         !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();
                 \2'''
-pc, _n = _final_re.subn(_modern, _modern_body, pc, count=1, flags=_final_re.S)
+s, _n = _final_re.subn(_modern, _modern_body, s, count=1, flags=_final_re.S)
 if _n != 1:
     raise SystemExit("Could not enforce modern WebView interception and manifest capture")
 _legacy = r'''(@SuppressWarnings\("deprecation"\)\s*@Override public WebResourceResponse shouldInterceptRequest\(WebView view, String url\)\s*\{).*?(return super\.shouldInterceptRequest\(view, url\);\s*\})'''
@@ -997,7 +997,7 @@ _legacy_body = r'''\1
                 if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
                     return emptyBlockedResponse();
                 \2'''
-pc, _n = _final_re.subn(_legacy, _legacy_body, pc, count=1, flags=_final_re.S)
+s, _n = _final_re.subn(_legacy, _legacy_body, s, count=1, flags=_final_re.S)
 if _n != 1:
     raise SystemExit("Could not enforce legacy WebView interception guard")
 
