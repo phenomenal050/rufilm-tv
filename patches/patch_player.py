@@ -31,9 +31,17 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (path == null) path = url;
         path = path.toLowerCase(Locale.ROOT);
         String host = parsed.getHost();
-        if (host != null && path.startsWith("/web-api/pts/video.player/") &&
-                (host.equalsIgnoreCase("cdn-vk.ru") || host.toLowerCase(Locale.ROOT).endsWith(".cdn-vk.ru") ||
-                 host.toLowerCase(Locale.ROOT).endsWith(".vkuser.net"))) return true;
+        if (host == null) return false;
+        String h = host.toLowerCase(Locale.ROOT);
+        if ((h.equals("ok.ru") || h.endsWith(".ok.ru")) && path.startsWith("/videoembed/")) return true;
+        if ((h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru")) &&
+                (path.startsWith("/web-api/pts/video.player/") ||
+                 (path.startsWith("/res/") && (path.endsWith(".css") || path.endsWith(".js") ||
+                  path.endsWith(".woff") || path.endsWith(".woff2") || path.endsWith(".svg"))))) return true;
+        if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") || h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru")) {
+            String[] mediaExtensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
+            for (String ext : mediaExtensions) if (path.endsWith(ext)) return true;
+        }
         String[] extensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
         for (String ext : extensions) if (path.endsWith(ext)) return true;
         return false;
