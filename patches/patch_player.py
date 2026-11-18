@@ -170,8 +170,13 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                             Object decoded = new org.json.JSONTokener(value == null ? "{}" : value).nextValue();
                             org.json.JSONObject snapshot = new org.json.JSONObject(String.valueOf(decoded));
                             org.json.JSONArray selectors = snapshot.optJSONArray("selectors");
+                            long startMs = (long)(snapshot.optDouble("time", 0.0) * 1000.0);
                             launchIntent.putExtra(NativePlayerActivity.EXTRA_EPISODE_SELECTORS, selectors == null ? "[]" : selectors.toString());
-                            launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, (long)(snapshot.optDouble("time", 0.0) * 1000.0));
+                            launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, startMs);
+                            android.util.Log.i("RuFilmTV", "VK fullscreen handoff snapshot: positionMs=" + startMs +
+                                " frame=" + snapshot.optInt("frameIndex", -1) +
+                                " playing=" + snapshot.optBoolean("playing", false) +
+                                " score=" + snapshot.optInt("score", -1));
                         } catch (Exception ignored) { }
                         web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});n=n.parentElement;}w.__rufilmSavedPlayerLayout={nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}});return true;})()", null);
                         web.postDelayed(() -> {
