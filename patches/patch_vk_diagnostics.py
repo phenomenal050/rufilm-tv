@@ -101,7 +101,8 @@ old_intercept = '''            @Override public WebResourceResponse shouldInterc
                 return super.shouldInterceptRequest(view, request);
             }'''
 new_intercept = '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
-                boolean blocked = request != null && isAdRequest(request.getUrl().toString());
+                boolean blocked = isAdFilteringEnabled() && request != null &&
+                    isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
                 logVkRequest(request, blocked);
                 if (blocked) return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, request);
