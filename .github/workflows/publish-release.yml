@@ -42,7 +42,7 @@ jobs:
 
       - name: Resolve and validate release version
         env:
-          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || (github.ref_name == 'test/vk-diagnostics' && 'v3.0.15-beta.1' || github.ref_name) }}
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
