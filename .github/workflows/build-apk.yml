@@ -89,11 +89,10 @@ jobs:
           grep -F "classList.toggle('rf-no-adfilter'" "$SRC"
           grep -F 'captureMediaRequest(request);' "$SRC"
           grep -F 'if(customView!=null){callback.onCustomViewHidden();return;}' "$SRC"
+          grep -F 'if ("native".equals(playerMode) && launchCapturedMedia())' "$SRC"
+          grep -F 'installVkFirstTapSupport();' "$SRC"
+          grep -F 'v.__rufilmPlayIntentUntil=Date.now()+8000' patches/patch_player.py
           grep -F 'path.startsWith("/videoembed/")' patches/patch_player.py
-          if grep -F 'Fullscreen handoff requested: native player' "$SRC"; then
-            echo "::error::The original VK player must not be replaced by a native fullscreen handoff."
-            exit 1
-          fi
           grep -F 'fallbackToOriginalScheduled' patches/NativePlayerActivity.java
           grep -F '!isRuFilmMediaRequest(url)' "$SRC"
           grep -F 'path.startsWith("/web-api/pts/video.player/")' "$SRC"
