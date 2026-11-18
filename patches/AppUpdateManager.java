@@ -74,8 +74,10 @@ public final class AppUpdateManager {
         new AlertDialog.Builder(activity)
             .setTitle("Канал обновлений")
             .setMessage("Выберите, какие обновления проверить. Тестовые сборки предназначены для желающих помочь с проверкой новых функций и могут содержать диагностические изменения.")
-            .setItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, (dialog, which) ->
-                checkChannel(activity, which == 1))
+            .setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, 0, (dialog, which) -> {
+                dialog.dismiss();
+                checkChannel(activity, which == 1);
+            })
             .setNegativeButton("Отмена", null)
             .show();
     }
