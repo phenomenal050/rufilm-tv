@@ -984,19 +984,18 @@ if _n != 1:
 _modern = r'''(@Override public WebResourceResponse shouldInterceptRequest\(WebView view, WebResourceRequest request\)\s*\{).*?(return super\.shouldInterceptRequest\(view, request\);\s*\})'''
 _modern_body = r'''\1
                 captureMediaRequest(request);
-                boolean blocked = isAdFilteringEnabled() && request != null &&
-                    isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
-                logVkRequest(request, blocked);
-                if (blocked) return emptyBlockedResponse();
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();
                 \2'''
 pc, _n = _final_re.subn(_modern, _modern_body, pc, count=1, flags=_final_re.S)
 if _n != 1:
     raise SystemExit("Could not enforce modern WebView interception and manifest capture")
 _legacy = r'''(@SuppressWarnings\("deprecation"\)\s*@Override public WebResourceResponse shouldInterceptRequest\(WebView view, String url\)\s*\{).*?(return super\.shouldInterceptRequest\(view, url\);\s*\})'''
 _legacy_body = r'''\1
-                boolean blocked = isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url);
-                logVkUrl(url, "GET", blocked, "legacy-api");
-                if (blocked) return emptyBlockedResponse();
+                if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
+                    return emptyBlockedResponse();
                 \2'''
 pc, _n = _final_re.subn(_legacy, _legacy_body, pc, count=1, flags=_final_re.S)
 if _n != 1:
