@@ -888,12 +888,7 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
-fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
-                if(customView!=null){callback.onCustomViewHidden();return;}
-                if ("native".equals(playerMode) && launchCapturedMedia()) {
-                    callback.onCustomViewHidden();
-                    return;
-                }"""
+fullscreen_handoff = fullscreen_anchor
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
