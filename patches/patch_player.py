@@ -844,14 +844,17 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
 # Keep the original HTML5/VK player in its own fullscreen surface.
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}"""
+fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
                 if ("native".equals(playerMode) && launchCapturedMedia()) {
                     callback.onCustomViewHidden();
                     return;
                 }"""
-if fullscreen_anchor not in s:
-    raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
-s = s.replace(fullscreen_anchor, fullscreen_anchor, 1)
+if fullscreen_handoff not in s:
+    if fullscreen_anchor not in s:
+        raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
+    s = s.replace(fullscreen_anchor, fullscreen_handoff, 1)
 
 # Keep the Android mouse cursor available while the WebView custom view is fullscreen.
 s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);',
