@@ -33,10 +33,21 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         String host = parsed.getHost();
         if (host == null) return false;
         String h = host.toLowerCase(Locale.ROOT);
-        if ((h.equals("ok.ru") || h.endsWith(".ok.ru")) &&
-                (path.startsWith("/videoembed/") || path.startsWith("/web-api/") || path.startsWith("/video/"))) return true;
-        if ((h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru")) &&
-                (path.startsWith("/web-api/pts/video.player/") || path.startsWith("/res/") || path.startsWith("/video/"))) return true;
+        // VK/OK player bootstrap, API and media must never be mistaken for ad requests.
+        boolean vkHost = h.equals("vk.com") || h.endsWith(".vk.com") ||
+            h.equals("vk.ru") || h.endsWith(".vk.ru") ||
+            h.equals("vkvideo.ru") || h.endsWith(".vkvideo.ru") ||
+            h.equals("ok.ru") || h.endsWith(".ok.ru") ||
+            h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru") ||
+            h.equals("userapi.com") || h.endsWith(".userapi.com");
+        if (vkHost && (path.startsWith("/video") || path.startsWith("/web-api/") ||
+                path.startsWith("/videoembed/") || path.startsWith("/video_ext") ||
+                path.startsWith("/al_video") || path.startsWith("/js/") ||
+                path.startsWith("/res/") || path.startsWith("/api/") ||
+                path.startsWith("/embed/"))) return true;
+        if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") ||
+                h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru") ||
+                h.endsWith(".vk-cdn.net") || h.endsWith(".vkuseraudio.net")) return true;
         if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") || h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru")) {
             String[] mediaExtensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
             for (String ext : mediaExtensions) if (path.endsWith(ext)) return true;
@@ -61,6 +72,18 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             "scan();if(d.documentElement&&!d.__rufilmFirstTapObserver){var ob=new MutationObserver(scan);ob.observe(d.documentElement,{childList:true,subtree:true});d.__rufilmFirstTapObserver=ob;}}" +
             "docs.forEach(bind);return true;}catch(e){return false;}})();";
         web.evaluateJavascript(script, null);
+    }
+
+    private void installAdCosmeticFilters() {
+        if (web == null) return;
+        final String js = "(function(){try{var id='rufilm-ad-cosmetic-style';var css=" +
+            "'html.rf-adfilter-enabled .adsbygoogle,html.rf-adfilter-enabled [id^=div-gpt-ad],html.rf-adfilter-enabled [class*=advert],html.rf-adfilter-enabled [id*=advert],html.rf-adfilter-enabled [class*=ad-container],html.rf-adfilter-enabled [id*=ad-container],html.rf-adfilter-enabled [class*=ad-slot],html.rf-adfilter-enabled [id*=ad-slot],html.rf-adfilter-enabled [class*=banner-ad],html.rf-adfilter-enabled [id*=banner-ad],html.rf-adfilter-enabled [class*=sponsor],html.rf-adfilter-enabled [id*=sponsor],html.rf-adfilter-enabled iframe[src*=doubleclick],html.rf-adfilter-enabled iframe[src*=adservice],html.rf-adfilter-enabled iframe[src*=adnxs],html.rf-adfilter-enabled iframe[src*=googlesyndication]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important}'" +
+            ";var st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}st.textContent=css;" +
+            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication]';" +
+            "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});}" +
+            "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}})();";
+        web.evaluateJavascript(js, null);
     }
 
     // Capture HLS/DASH manifests and the request headers used by the WebView.
@@ -139,8 +162,9 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                         "var season=pick(/season|сезон/),episode=pick(/episode|серия|эпизод/);" +
                         "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||(c[0]===season?c[1]:c[0]);}" +
                         "var sels=[];if(season)sels.push(season);if(episode&&episode!==season)sels.push(episode);" +
-                        "var v=document.querySelector('video');if(!v){for(var j=1;j<docs.length&&!v;j++)try{v=docs[j].querySelector('video');}catch(e){}}" +
-                        "return JSON.stringify({selectors:sels,time:v&&isFinite(v.currentTime)?v.currentTime:0});})()";
+                        "var best=null,bestScore=-1;docs.forEach(function(d,di){try{[].slice.call(d.querySelectorAll('video')).forEach(function(v){var r=v.getBoundingClientRect(),cs=d.defaultView.getComputedStyle(v);var visible=r.width>120&&r.height>70&&r.bottom>0&&r.right>0&&cs.display!=='none'&&cs.visibility!=='hidden';var score=(v.paused?0:100)+(v.readyState>=2?30:0)+(v.videoWidth>0?20:0)+(v.currentTime>0?15:0)+(visible?20:0);if(score>bestScore){bestScore=score;best={video:v,frame:frameIds[di],score:score};}});}catch(e){}});" +
+                        "var v=best&&best.video;var tm=v&&isFinite(v.currentTime)?v.currentTime:0;" +
+                        "return JSON.stringify({selectors:sels,time:tm,frameIndex:best?best.frame:-1,score:bestScore,playing:!!(v&&!v.paused)});})()";
                     web.evaluateJavascript(snapshotScript, value -> {
                         try {
                             Object decoded = new org.json.JSONTokener(value == null ? "{}" : value).nextValue();
@@ -968,9 +992,13 @@ s = s.replace("web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DE
 
 # Add a compact app menu with the GitHub Release updater.
 once("private Button cleanButton, filterButton, playerButton;",
-     "private Button cleanButton, filterButton, playerButton, moreButton;",
+     "private Button cleanButton, filterButton, playerButton, moreButton, refreshButton;",
      "app menu button field")
-once('        Button search=button("⌕",true);',
+once('        refreshButton=button("↻",false); refreshButton.setTextSize(21);
+        refreshButton.setContentDescription("Обновить страницу");
+        refreshButton.setOnClickListener(v->{ if(web!=null){ web.reload(); web.requestFocus(); } });
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(42),dp(42));rp.leftMargin=dp(5);header.addView(refreshButton,rp);
+        Button search=button("⌕",true);',
      '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        Button search=button("⌕",true);',
      "app menu button")
 once("    private void showPlayerDialog() {",
@@ -1021,7 +1049,7 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
 # Apply after every other transformation so later insertions cannot undo these guards.
 import re as _final_re
 _apply = '''    private void applyCleanMode(){
-        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");})();",null);
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+");})();",null);
         if(cleanButton!=null){
             cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
             cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
