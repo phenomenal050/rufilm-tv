@@ -95,10 +95,11 @@ jobs:
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F 'Native handoff requested start position' patches/NativePlayerActivity.java
           grep -F 'v.__rufilmPlayIntentUntil=Date.now()+8000' patches/patch_player.py
-          grep -F 'path.startsWith("/videoembed/")' patches/patch_player.py
+          grep -F 'if (vkHost) return true;' patches/patch_player.py
+          grep -F 'installVkFrameSupport();' "$SRC"
           grep -F 'fallbackToOriginalScheduled' patches/NativePlayerActivity.java
           grep -F '!isRuFilmMediaRequest(url)' "$SRC"
-          grep -F 'path.startsWith("/web-api/pts/video.player/")' "$SRC"
+          grep -F 'vkHost' "$SRC"
           grep -F 'setMediaPlaybackRequiresUserGesture(false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
