@@ -9,6 +9,7 @@ on:
         default: "v3.0.14"
         type: string
   push:
+    branches: [feature/public-test-channel]
     tags:
       - "v*"
 
@@ -45,7 +46,7 @@ jobs:
 
       - name: Resolve and validate release version
         env:
-          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || (github.ref_name == 'feature/public-test-channel' && 'v3.0.14' || github.ref_name) }}
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
