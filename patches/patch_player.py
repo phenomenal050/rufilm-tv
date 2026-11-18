@@ -391,6 +391,15 @@ if 'rufilmActiveInstance = this;' not in s:
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.requestFocus();
+                v.requestFocusFromTouch();
+            }
+            return false;
+        });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21)
             android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
@@ -835,11 +844,11 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
 # Keep the original HTML5/VK player in its own fullscreen surface.
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}
                 if ("native".equals(playerMode) && launchCapturedMedia()) {
                     callback.onCustomViewHidden();
                     return;
-                }
-                if(customView!=null){callback.onCustomViewHidden();return;}"""
+                }"""
 if fullscreen_anchor not in s:
     raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
 s = s.replace(fullscreen_anchor, fullscreen_anchor, 1)
