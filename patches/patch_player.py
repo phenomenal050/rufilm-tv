@@ -999,13 +999,9 @@ s = s.replace("web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DE
 once("private Button cleanButton, filterButton, playerButton;",
      "private Button cleanButton, filterButton, playerButton, moreButton, refreshButton;",
      "app menu button field")
-once('        refreshButton=button("↻",false); refreshButton.setTextSize(21);
-        refreshButton.setContentDescription("Обновить страницу");
-        refreshButton.setOnClickListener(v->{ if(web!=null){ web.reload(); web.requestFocus(); } });
-        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(42),dp(42));rp.leftMargin=dp(5);header.addView(refreshButton,rp);
-        Button search=button("⌕",true);',
-     '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        Button search=button("⌕",true);',
-     "app menu button")
+once('        Button search=button("⌕",true);',
+     '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\\n        moreButton.setOnClickListener(v->showAppMenu());\\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\\n        refreshButton=button("↻",false); refreshButton.setTextSize(21);\\n        refreshButton.setContentDescription("Обновить страницу");\\n        refreshButton.setOnClickListener(v->{ if(web!=null){ web.reload(); web.requestFocus(); } });\\n        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(42),dp(42));rp.leftMargin=dp(5);header.addView(refreshButton,rp);\\n        Button search=button("⌕",true);',
+     "app menu and refresh button")
 once("    private void showPlayerDialog() {",
      '''    private void showAppMenu() {
         String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
