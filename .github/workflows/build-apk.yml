@@ -89,7 +89,10 @@ jobs:
           grep -F "classList.toggle('rf-no-adfilter'" "$SRC"
           grep -F 'captureMediaRequest(request);' "$SRC"
           grep -F 'if(customView!=null){callback.onCustomViewHidden();return;}' "$SRC"
-          grep -F 'if ("native".equals(playerMode) && launchCapturedMedia())' "$SRC"
+          if grep -F 'if ("native".equals(playerMode) && launchCapturedMedia())' "$SRC"; then
+            echo "::error::The original VK fullscreen player must not be handed off to Media3."
+            exit 1
+          fi
           grep -F 'installVkFirstTapSupport();' "$SRC"
           grep -F 'installAdCosmeticFilters();' "$SRC"
           grep -F 'refreshButton=button("↻",false)' "$SRC"
