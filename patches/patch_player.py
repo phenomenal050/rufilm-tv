@@ -33,11 +33,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         String host = parsed.getHost();
         if (host == null) return false;
         String h = host.toLowerCase(Locale.ROOT);
-        if ((h.equals("ok.ru") || h.endsWith(".ok.ru")) && path.startsWith("/videoembed/")) return true;
+        if ((h.equals("ok.ru") || h.endsWith(".ok.ru")) &&
+                (path.startsWith("/videoembed/") || path.startsWith("/web-api/") || path.startsWith("/video/"))) return true;
         if ((h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru")) &&
-                (path.startsWith("/web-api/pts/video.player/") ||
-                 (path.startsWith("/res/") && (path.endsWith(".css") || path.endsWith(".js") ||
-                  path.endsWith(".woff") || path.endsWith(".woff2") || path.endsWith(".svg"))))) return true;
+                (path.startsWith("/web-api/pts/video.player/") || path.startsWith("/res/") || path.startsWith("/video/"))) return true;
         if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") || h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru")) {
             String[] mediaExtensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
             for (String ext : mediaExtensions) if (path.endsWith(ext)) return true;
@@ -45,6 +44,23 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         String[] extensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
         for (String ext : extensions) if (path.endsWith(ext)) return true;
         return false;
+    }
+
+    // Recover a user's first Play tap if VK attaches the stream asynchronously.
+    private void installVkFirstTapSupport() {
+        if (web == null) return;
+        final String script = "(function(){try{var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}" +
+            "function bind(d){if(!d||d.__rufilmFirstTapInstalled)return;d.__rufilmFirstTapInstalled=true;" +
+            "function arm(v){if(!v||v.__rufilmFirstTapBound)return;v.__rufilmFirstTapBound=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');" +
+            "function start(){if(!v.__rufilmPlayIntentUntil||Date.now()>v.__rufilmPlayIntentUntil||!v.paused||v.readyState<2||!v.currentSrc)return;try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}}" +
+            "['loadeddata','canplay','canplaythrough','loadedmetadata'].forEach(function(n){v.addEventListener(n,start);});" +
+            "d.addEventListener('click',function(e){var t=e.target,hit=t===v||v.contains(t);if(!hit){var el=t&&t.closest?t.closest('button,[role=button],[class*=play],[aria-label*=play i],[title*=play i]'):null;" +
+            "if(el){var root=v;for(var k=0;k<7&&root;k++,root=root.parentElement){if(root.contains(el)){hit=true;break;}}}}" +
+            "if(!hit)return;v.__rufilmPlayIntentUntil=Date.now()+8000;[80,300,700,1300,2200].forEach(function(ms){setTimeout(start,ms);});},true);}" +
+            "function scan(){[].slice.call(d.querySelectorAll('video')).forEach(arm);}" +
+            "scan();if(d.documentElement&&!d.__rufilmFirstTapObserver){var ob=new MutationObserver(scan);ob.observe(d.documentElement,{childList:true,subtree:true});d.__rufilmFirstTapObserver=ob;}}" +
+            "docs.forEach(bind);return true;}catch(e){return false;}})();";
+        web.evaluateJavascript(script, null);
     }
 
     // Capture HLS/DASH manifests and the request headers used by the WebView.
@@ -232,7 +248,7 @@ if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActi
     )
     if not page_finished:
         raise SystemExit("Could not find WebViewClient.onPageFinished for DPAD selector setup.")
-    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();"
+    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
 
@@ -819,6 +835,10 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
 # Keep the original HTML5/VK player in its own fullscreen surface.
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if ("native".equals(playerMode) && launchCapturedMedia()) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 if fullscreen_anchor not in s:
     raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
