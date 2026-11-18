@@ -9,7 +9,7 @@ on:
         default: "v3.0.15-beta.5"
         type: string
   push:
-    branches: [fix/updater-channel-and-ad-filter-toggle]
+    branches: [fix/updater-channel-and-ad-filter-toggle, fix/vk-first-tap-layout-ad-target]
 
 permissions:
   contents: write
