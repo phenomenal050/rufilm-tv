@@ -8,9 +8,6 @@ on:
         required: true
         default: "v3.0.15-beta.1"
         type: string
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: write
