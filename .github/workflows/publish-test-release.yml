@@ -6,11 +6,8 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.14"
+        default: "v3.0.15-beta.1"
         type: string
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: write
