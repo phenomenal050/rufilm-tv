@@ -807,6 +807,23 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
                 }
                 fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
 
+# Hand off site fullscreen requests to Media3 when a fresh manifest was captured.
+# The HTML5 player remains the fallback when no usable manifest exists.
+fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}"""
+fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                // Prefer the captured HLS/DASH stream in the native Media3 player.
+                // If no fresh manifest is available, keep the original HTML5 fullscreen view.
+                if ("native".equals(playerMode) && launchCapturedMedia()) {
+                    android.util.Log.i("RuFilmTV", "Fullscreen handoff requested: native player");
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                if(customView!=null){callback.onCustomViewHidden();return;}"""
+if fullscreen_anchor not in s:
+    raise SystemExit("Could not find onShowCustomView handoff anchor in generated MainActivity")
+s = s.replace(fullscreen_anchor, fullscreen_handoff, 1)
+
 # Keep the Android mouse cursor available while the WebView custom view is fullscreen.
 s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);',
               'decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);')
