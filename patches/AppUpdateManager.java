@@ -11,6 +11,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
+import android.widget.Button;
+import android.widget.LinearLayout;
 
 import androidx.core.content.FileProvider;
 
@@ -71,13 +73,51 @@ public final class AppUpdateManager {
 
     public static void check(Activity activity) {
         if (!isAlive(activity)) return;
-        new AlertDialog.Builder(activity)
+
+        // Explicit focusable buttons are more reliable than AlertDialog list rows
+        // on Android TV themes and remote-controlled devices.
+        LinearLayout choices = new LinearLayout(activity);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        int horizontal = (int) (24 * activity.getResources().getDisplayMetrics().density);
+        int vertical = (int) (8 * activity.getResources().getDisplayMetrics().density);
+        choices.setPadding(horizontal, vertical, horizontal, vertical);
+
+        Button stable = new Button(activity);
+        stable.setText("Стабильные обновления");
+        stable.setAllCaps(false);
+        stable.setFocusable(true);
+        stable.setFocusableInTouchMode(true);
+
+        Button test = new Button(activity);
+        test.setText("Тестовые сборки");
+        test.setAllCaps(false);
+        test.setFocusable(true);
+        test.setFocusableInTouchMode(true);
+
+        LinearLayout.LayoutParams row = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.bottomMargin = vertical;
+        choices.addView(stable, row);
+        choices.addView(test, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
             .setTitle("Канал обновлений")
             .setMessage("Выберите, какие обновления проверить. Тестовые сборки предназначены для желающих помочь с проверкой новых функций и могут содержать диагностические изменения.")
-            .setItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, (dialog, which) ->
-                checkChannel(activity, which == 1))
+            .setView(choices)
             .setNegativeButton("Отмена", null)
-            .show();
+            .create();
+
+        stable.setOnClickListener(view -> {
+            dialog.dismiss();
+            checkChannel(activity, false);
+        });
+        test.setOnClickListener(view -> {
+            dialog.dismiss();
+            checkChannel(activity, true);
+        });
+        dialog.setOnShowListener(ignored -> stable.requestFocus());
+        dialog.show();
     }
 
     private static void checkChannel(Activity activity, boolean testChannel) {
