@@ -101,6 +101,7 @@ old_intercept = '''            @Override public WebResourceResponse shouldInterc
                 return super.shouldInterceptRequest(view, request);
             }'''
 new_intercept = '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
+                captureMediaRequest(request);
                 boolean blocked = isAdFilteringEnabled() && request != null &&
                     isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
                 logVkRequest(request, blocked);
@@ -128,7 +129,7 @@ old_legacy = '''            @SuppressWarnings("deprecation")
             }'''
 new_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
-                boolean blocked = isAdFilteringEnabled() && isAdRequest(url);
+                boolean blocked = isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url);
                 logVkUrl(url, "GET", blocked, "legacy-api");
                 if (blocked) return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, url);
