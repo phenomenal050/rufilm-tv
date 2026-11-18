@@ -205,11 +205,7 @@ episode_support = r'''
             "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
             "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
             "b.style.cssText='position:fixed;z-index:2147483647;width:52px;height:52px;border:1px solid rgba(255,255,255,.72);border-radius:50%;background:rgba(105,91,226,.97);box-shadow:0 4px 16px rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;opacity:.98;-webkit-tap-highlight-color:transparent;';" +
-            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var ok=false;" +
-            "try{if(window.RuFilmPlayer&&window.RuFilmPlayer.openCaptured)ok=window.RuFilmPlayer.openCaptured();}catch(x){}" +
-            "if(!ok){try{var u=v.currentSrc||v.src;if(u&&/^https?:\\/\\//i.test(u)&&window.RuFilmPlayer&&window.RuFilmPlayer.openNative)ok=window.RuFilmPlayer.openNative(String(u),String(location.href),String(navigator.userAgent));}catch(x){}}" +
-            "if(!ok){b.title='Поток ещё загружается — попробуйте через пару секунд';b.style.background='rgba(190,78,70,.98)';setTimeout(function(){b.style.background='rgba(105,91,226,.97)';},900);}" +
-            "},true);" +
+            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();try{if(v.requestFullscreen)v.requestFullscreen();else if(v.webkitEnterFullscreen)v.webkitEnterFullscreen();}catch(x){}},true);" +
             "document.body.appendChild(b);v.__rufilmFsButton=b;function place(){try{var r=v.getBoundingClientRect(),w=document.documentElement.clientWidth,h=document.documentElement.clientHeight;" +
             "var visible=!v.paused&&r.width>120&&r.height>70&&r.bottom>0&&r.top<h&&r.right>0&&r.left<w&&getComputedStyle(v).visibility!=='hidden'&&getComputedStyle(v).display!=='none';" +
             "b.style.display=visible?'flex':'none';if(visible){var x=Math.max(8,Math.min(w-60,r.left+(r.width-52)/2));var y=r.bottom+9;if(y+52>h)y=Math.max(8,r.bottom-60);b.style.left=x+'px';b.style.top=y+'px';}}catch(x){b.style.display='none';}}" +
