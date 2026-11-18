@@ -71,10 +71,12 @@ public final class AppUpdateManager {
 
     public static void check(Activity activity) {
         if (!isAlive(activity)) return;
+        android.content.SharedPreferences prefs = activity.getSharedPreferences("rufilm_tv_settings", Activity.MODE_PRIVATE);
+        int selected = prefs.getInt("update_channel", 0);
         new AlertDialog.Builder(activity)
             .setTitle("Канал обновлений")
-            .setMessage("Выберите, какие обновления проверить. Тестовые сборки предназначены для желающих помочь с проверкой новых функций и могут содержать диагностические изменения.")
-            .setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, 0, (dialog, which) -> {
+            .setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, selected, (dialog, which) -> {
+                prefs.edit().putInt("update_channel", which).apply();
                 dialog.dismiss();
                 checkChannel(activity, which == 1);
             })
