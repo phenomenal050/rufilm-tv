@@ -39,7 +39,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             h.equals("vkvideo.ru") || h.endsWith(".vkvideo.ru") ||
             h.equals("ok.ru") || h.endsWith(".ok.ru") ||
             h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru") ||
-            h.equals("userapi.com") || h.endsWith(".userapi.com");
+            h.equals("userapi.com") || h.endsWith(".userapi.com") ||
+            h.equals("mycdn.me") || h.endsWith(".mycdn.me") ||
+            h.equals("vkuser.net") || h.endsWith(".vkuser.net") ||
+            h.equals("vk-cdn.net") || h.endsWith(".vk-cdn.net") ||
+            h.equals("vkuseraudio.net") || h.endsWith(".vkuseraudio.net");
         if (vkHost) return true; // Preserve all first-party player bootstrap/API assets on VK/OK hosts.
         if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") ||
                 h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru") ||
@@ -889,7 +893,15 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
-fullscreen_handoff = fullscreen_anchor
+fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}
+                // Hand off only after VK has supplied a fresh playable manifest.
+                // The native player captures the exact active video position before hiding the original.
+                if ("native".equals(playerMode) && launchCapturedMedia()) {
+                    android.util.Log.i("RuFilmTV", "VK fullscreen intercepted by native player");
+                    callback.onCustomViewHidden();
+                    return;
+                }"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
