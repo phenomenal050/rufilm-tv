@@ -86,6 +86,24 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         web.evaluateJavascript(js, null);
     }
 
+    private void installVkFrameSupport() {
+        if (web == null) return;
+        final String js = "(function(){try{" +
+            "function collect(w,a,depth){if(depth>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,depth+1);}catch(e){}}catch(e){}}" +
+            "function scan(){var ds=[];collect(window,ds,0);ds.forEach(function(d){try{var w=d.defaultView||window;if(!d.__rufilmFrameClickHook){d.__rufilmFrameClickHook=true;" +
+            "d.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IFRAME'&&/vk|ok\\.ru/i.test(t.src||'')){window.__rufilmVkIntentUntil=Date.now()+10000;}},true);}" +
+            "[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmFramePlayHook)return;v.__rufilmFramePlayHook=true;" +
+            "function start(){var until=Math.max(w.__rufilmVkIntentUntil||0,window.__rufilmVkIntentUntil||0);if(Date.now()>until||!v.paused||v.readyState<2||!v.currentSrc)return;try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}}" +
+            "['loadeddata','canplay','canplaythrough','loadedmetadata'].forEach(function(n){v.addEventListener(n,start);});" +
+            "d.addEventListener('click',function(e){var t=e.target;if(t===v||(t&&v.contains(t))){w.__rufilmVkIntentUntil=Date.now()+10000;[100,350,800,1500].forEach(function(ms){setTimeout(start,ms);});}},true);" +
+            "});if(!d.__rufilmFrameObserver&&d.documentElement){d.__rufilmFrameObserver=new MutationObserver(function(){scan();});d.__rufilmFrameObserver.observe(d.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}});}" +
+            "window.addEventListener('message',function(e){try{if(!/vk|ok\\.ru/i.test(e.origin||''))return;var x=e.data;if(typeof x==='string'){try{x=JSON.parse(x);}catch(z){return;}}" +
+            "var found=null;function walk(o,k){if(!o||typeof o!=='object'||k>5)return;Object.keys(o).forEach(function(n){var v=o[n];if(/^(currentTime|current_time|time|position)$/i.test(n)&&typeof v==='number'&&isFinite(v)&&v>0&&v<86400)found=v;else if(v&&typeof v==='object')walk(v,k+1);});}walk(x,0);if(found!==null)window.__rufilmVkTime=found;}catch(z){}},true);" +
+            "scan();if(!window.__rufilmFrameRootObserver&&document.documentElement){window.__rufilmFrameRootObserver=new MutationObserver(scan);window.__rufilmFrameRootObserver.observe(document.documentElement,{childList:true,subtree:true});}return true;}catch(e){return false;}})();";
+        web.evaluateJavascript(js, null);
+    }
+
     // Capture HLS/DASH manifests and the request headers used by the WebView.
     private void captureMediaRequest(WebResourceRequest request) {
         if (request == null || request.getUrl() == null ||
@@ -163,7 +181,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                         "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||(c[0]===season?c[1]:c[0]);}" +
                         "var sels=[];if(season)sels.push(season);if(episode&&episode!==season)sels.push(episode);" +
                         "var best=null,bestScore=-1;docs.forEach(function(d,di){try{[].slice.call(d.querySelectorAll('video')).forEach(function(v){var r=v.getBoundingClientRect(),cs=d.defaultView.getComputedStyle(v);var visible=r.width>120&&r.height>70&&r.bottom>0&&r.right>0&&cs.display!=='none'&&cs.visibility!=='hidden';var score=(v.paused?0:100)+(v.readyState>=2?30:0)+(v.videoWidth>0?20:0)+(v.currentTime>0?15:0)+(visible?20:0);if(score>bestScore){bestScore=score;best={video:v,frame:frameIds[di],score:score};}});}catch(e){}});" +
-                        "var v=best&&best.video;var tm=v&&isFinite(v.currentTime)?v.currentTime:0;" +
+                        "var v=best&&best.video;var tm=v&&isFinite(v.currentTime)?v.currentTime:0;if(tm<0.5&&window.__rufilmVkTime)tm=window.__rufilmVkTime;" +
                         "return JSON.stringify({selectors:sels,time:tm,frameIndex:best?best.frame:-1,score:bestScore,playing:!!(v&&!v.paused)});})()";
                     web.evaluateJavascript(snapshotScript, value -> {
                         try {
@@ -277,7 +295,7 @@ if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActi
     )
     if not page_finished:
         raise SystemExit("Could not find WebViewClient.onPageFinished for DPAD selector setup.")
-    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();\n                MainActivity.this.installAdCosmeticFilters();\n                MainActivity.this.applyCleanMode();"
+    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();\n                MainActivity.this.installVkFrameSupport();\n                MainActivity.this.installAdCosmeticFilters();\n                MainActivity.this.applyCleanMode();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
 
