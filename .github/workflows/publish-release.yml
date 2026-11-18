@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.13"
+        default: "v3.0.15-beta.5"
         type: string
   push:
     tags:
@@ -49,7 +49,12 @@ jobs:
         run: |
           set -euo pipefail
           TAG="$INPUT_TAG"
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Release tag must look like v3.0.2"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] || { echo "::error::Release tag must look like v3.0.2 or v3.0.2-beta.1"; exit 1; }
+          if [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+            echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
           VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' patches/app-build.gradle.kts | head -n 1)"
           TAG_VERSION="${TAG#v}"
@@ -111,8 +116,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          RELEASE_ARGS=()
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
           gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
             --title "RuFilmTV $RELEASE_TAG" \
-            --generate-notes
+            --generate-notes \
+            "${RELEASE_ARGS[@]}"
