@@ -79,8 +79,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         final String js = "(function(){try{var id='rufilm-ad-cosmetic-style';var css=" +
             "'html.rf-adfilter-enabled .adsbygoogle,html.rf-adfilter-enabled [id^=div-gpt-ad],html.rf-adfilter-enabled [class*=advert],html.rf-adfilter-enabled [id*=advert],html.rf-adfilter-enabled [class*=ad-container],html.rf-adfilter-enabled [id*=ad-container],html.rf-adfilter-enabled [class*=ad-slot],html.rf-adfilter-enabled [id*=ad-slot],html.rf-adfilter-enabled [class*=banner-ad],html.rf-adfilter-enabled [id*=banner-ad],html.rf-adfilter-enabled [class*=sponsor],html.rf-adfilter-enabled [id*=sponsor],html.rf-adfilter-enabled iframe[src*=doubleclick],html.rf-adfilter-enabled iframe[src*=adservice],html.rf-adfilter-enabled iframe[src*=adnxs],html.rf-adfilter-enabled iframe[src*=googlesyndication]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important}'" +
             ";var st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}st.textContent=css;" +
-            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication]';" +
-            "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});}" +
+            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],.ads,.ad,.ad-box,.ad-wrapper,.adblock,[id^=ad_],[class^=ad_],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication]';" +
+            "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;var n=((e.id||'')+' '+(typeof e.className==='string'?e.className:'')).toLowerCase();if(!/(^|[-_\\s])(ad|ads|advert|banner|sponsor)([-_\\s]|$)/.test(n)&&!/(advert|ad-container|ad-slot|banner-ad|sponsor)/.test(n))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});}" +
             "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(js, null);
@@ -272,7 +272,7 @@ if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActi
     )
     if not page_finished:
         raise SystemExit("Could not find WebViewClient.onPageFinished for DPAD selector setup.")
-    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();"
+    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();\n                MainActivity.this.installAdCosmeticFilters();\n                MainActivity.this.applyCleanMode();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
 
 
