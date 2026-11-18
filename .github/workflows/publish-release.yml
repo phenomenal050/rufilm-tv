@@ -8,6 +8,8 @@ on:
         required: true
         default: "v3.0.15-beta.1"
         type: string
+  push:
+    branches: [test/vk-diagnostics]
 
 permissions:
   contents: write
