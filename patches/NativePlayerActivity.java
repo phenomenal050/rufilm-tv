@@ -86,6 +86,8 @@ public class NativePlayerActivity extends Activity {
     private String currentUserAgent;
     private HashMap<String, String> currentHeaders = new HashMap<>();
     private long captureBaselineForSelection = 0L;
+    private long requestedStartPositionMs = 0L;
+    private boolean startPositionApplied = false;
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null && !isFinishing()) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 650L); } } };
 
@@ -306,9 +308,21 @@ public class NativePlayerActivity extends Activity {
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
         player.setMediaItem(item.build());
-        long startPosition = getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L);
-        if (startPosition > 0L) player.seekTo(startPosition);
+        requestedStartPositionMs = Math.max(0L, getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L));
+        android.util.Log.i("RuFilmTV", "Native handoff requested start position: " + requestedStartPositionMs + " ms");
         player.addListener(new Player.Listener() {
+            @Override public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState == Player.STATE_READY && !startPositionApplied) {
+                    startPositionApplied = true;
+                    long duration = player.getDuration();
+                    long target = requestedStartPositionMs;
+                    if (target > 0L && (duration == C.TIME_UNSET || duration <= 0L || target < duration)) {
+                        player.seekTo(target);
+                        android.util.Log.i("RuFilmTV", "Native player seek applied: " + target + " ms");
+                    }
+                    player.play();
+                }
+            }
             @Override public void onPlayerError(androidx.media3.common.PlaybackException error) {
                 String detail = "Ошибка потока, код: " + error.errorCode;
                 Throwable cause = error.getCause();
@@ -342,7 +356,6 @@ public class NativePlayerActivity extends Activity {
             }
         });
         player.prepare();
-        player.play();
         syncHandler.postDelayed(syncRunnable, 1200L);
         assistantHandler.post(updateTimeline);
         scheduleAssistantHide();
