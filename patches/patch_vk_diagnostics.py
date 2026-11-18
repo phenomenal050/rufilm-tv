@@ -106,12 +106,15 @@ new_intercept = '''            @Override public WebResourceResponse shouldInterc
 if old_intercept in source:
     replace_once(old_intercept, new_intercept, "request interception diagnostics")
 else:
-    patched_filter = '''                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
+    toggle_filter = '''                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();'''
-    patched_with_log = '''                boolean blocked = isAdFilteringEnabled() && request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
+    toggle_with_log = '''                boolean blocked = isAdFilteringEnabled() && request != null &&
+                    isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
                 logVkRequest(request, blocked);
                 if (blocked) return emptyBlockedResponse();'''
-    replace_once(patched_filter, patched_with_log, "patched request interception diagnostics")
+    replace_once(toggle_filter, toggle_with_log, "ad-filter toggle request diagnostics")
 
 old_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
