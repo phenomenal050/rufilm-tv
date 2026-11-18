@@ -4,7 +4,7 @@ name: Build RuFilmTV APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'feature/public-test-channel']
+    branches: [main, 'feature/public-test-channel', 'test/vk-diagnostics']
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
