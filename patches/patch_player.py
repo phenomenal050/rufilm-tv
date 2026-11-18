@@ -26,9 +26,14 @@ anchor = "    // ABP-style network filtering; the cinema origin and ordinary med
 capture = '''    // Never let the ad filter intercept actual video manifests or media segments.
     private boolean isRuFilmMediaRequest(String url) {
         if (url == null) return false;
-        String path = Uri.parse(url).getPath();
+        Uri parsed = Uri.parse(url);
+        String path = parsed.getPath();
         if (path == null) path = url;
         path = path.toLowerCase(Locale.ROOT);
+        String host = parsed.getHost();
+        if (host != null && path.startsWith("/web-api/pts/video.player/") &&
+                (host.equalsIgnoreCase("cdn-vk.ru") || host.toLowerCase(Locale.ROOT).endsWith(".cdn-vk.ru") ||
+                 host.toLowerCase(Locale.ROOT).endsWith(".vkuser.net"))) return true;
         String[] extensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
         for (String ext : extensions) if (path.endsWith(ext)) return true;
         return false;
@@ -1017,6 +1022,13 @@ _legacy_body = r'''\1
 s, _n = _final_re.subn(_legacy, _legacy_body, s, count=1, flags=_final_re.S)
 if _n != 1:
     raise SystemExit("Could not enforce legacy WebView interception guard")
+
+# VK returns its playable stream asynchronously from this player API after the user presses Play.
+# Do not make WebView reject that delayed play() call as an autoplay gesture violation.
+if "setMediaPlaybackRequiresUserGesture(true)" in s:
+    s = s.replace("setMediaPlaybackRequiresUserGesture(true)", "setMediaPlaybackRequiresUserGesture(false)", 1)
+elif "setMediaPlaybackRequiresUserGesture(false)" not in s:
+    raise SystemExit("Could not locate WebView media gesture setting")
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
