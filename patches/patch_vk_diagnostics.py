@@ -93,7 +93,10 @@ new_console = '''            @Override public boolean onConsoleMessage(android.w
 replace_once(old_console, new_console, "console diagnostics")
 
 old_intercept = '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
-                if (request != null && isAdRequest(request.getUrl().toString()))
+                captureMediaRequest(request);
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, request);
             }'''
@@ -118,7 +121,8 @@ else:
 
 old_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
-                if (isAdRequest(url)) return emptyBlockedResponse();
+                if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
+                    return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, url);
             }'''
 new_legacy = '''            @SuppressWarnings("deprecation")
