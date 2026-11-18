@@ -730,8 +730,8 @@ methods = r"""
 if "private void showThemeDialog()" not in s:
     s = s.replace("    private void updateFilterLists(){", methods + "\n    private void updateFilterLists(){")
 
-// User-controlled master switch for network ad filtering. Enabled by default.
-if ("private boolean isAdFilteringEnabled()" not in s:
+# User-controlled master switch for network ad filtering. Enabled by default.
+if "private boolean isAdFilteringEnabled()" not in s:
     ad_filter_controls = r"""
     private boolean isAdFilteringEnabled() {
         return prefs == null || prefs.getBoolean("ad_filters_enabled", true);
