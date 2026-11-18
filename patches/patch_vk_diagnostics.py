@@ -58,8 +58,8 @@ helpers = r'''
 
     private String safeVkMessage(String message) {
         if (message == null) return "";
-        String safe = message.replaceAll("(?i)https?://[^\\\\s\\\\\"']+", "[url]");
-        safe = safe.replaceAll("(?i)(cookie|authorization|token|access_token|sig|key)=([^&\\\\s]+)", "$1=[redacted]");
+        String safe = message.replaceAll("(?i)https?://[^\\s\"']+", "[url]");
+        safe = safe.replaceAll("(?i)(cookie|authorization|token|access_token|sig|key)=([^&\\s]+)", "$1=[redacted]");
         return safe.length() > 280 ? safe.substring(0, 280) : safe;
     }
 
@@ -103,7 +103,15 @@ new_intercept = '''            @Override public WebResourceResponse shouldInterc
                 if (blocked) return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, request);
             }'''
-replace_once(old_intercept, new_intercept, "request interception diagnostics")
+if old_intercept in source:
+    replace_once(old_intercept, new_intercept, "request interception diagnostics")
+else:
+    patched_filter = '''                if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();'''
+    patched_with_log = '''                boolean blocked = request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
+                logVkRequest(request, blocked);
+                if (blocked) return emptyBlockedResponse();'''
+    replace_once(patched_filter, patched_with_log, "patched request interception diagnostics")
 
 old_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
