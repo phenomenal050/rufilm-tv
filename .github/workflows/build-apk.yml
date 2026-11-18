@@ -91,6 +91,9 @@ jobs:
           grep -F 'if(customView!=null){callback.onCustomViewHidden();return;}' "$SRC"
           grep -F 'if ("native".equals(playerMode) && launchCapturedMedia())' "$SRC"
           grep -F 'installVkFirstTapSupport();' "$SRC"
+          grep -F 'installAdCosmeticFilters();' "$SRC"
+          grep -F 'refreshButton=button("↻",false)' "$SRC"
+          grep -F 'Native handoff requested start position' patches/NativePlayerActivity.java
           grep -F 'v.__rufilmPlayIntentUntil=Date.now()+8000' patches/patch_player.py
           grep -F 'path.startsWith("/videoembed/")' patches/patch_player.py
           grep -F 'fallbackToOriginalScheduled' patches/NativePlayerActivity.java
