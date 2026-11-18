@@ -91,6 +91,8 @@ jobs:
           grep -F 'Fullscreen handoff requested: native player' "$SRC"
           grep -F 'fallbackToOriginalScheduled' patches/NativePlayerActivity.java
           grep -F '!isRuFilmMediaRequest(url)' "$SRC"
+          grep -F 'path.startsWith("/web-api/pts/video.player/")' "$SRC"
+          grep -F 'setMediaPlaybackRequiresUserGesture(false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
             echo "::error::Found an unconditional diagnostic ad-blocking path."
