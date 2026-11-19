@@ -307,6 +307,7 @@ public class NativePlayerActivity extends Activity {
         } catch (Exception ignored) { }
         updateEpisodeButtonLabels();
         setContentView(root);
+        showAssistantControls();
 
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
