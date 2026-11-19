@@ -114,7 +114,7 @@ jobs:
 
       - name: Publish GitHub Release with APK and checksum
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh release create "$RELEASE_TAG" \
