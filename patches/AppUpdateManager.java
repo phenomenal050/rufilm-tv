@@ -33,8 +33,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class AppUpdateManager {
-    private static final String RELEASE_API =
+    private static final String STABLE_RELEASE_API =
         "https://api.github.com/repos/phenomenal050/rufilm-tv/releases/latest";
+    private static final String TEST_RELEASES_API =
+        "https://api.github.com/repos/phenomenal050/rufilm-tv/releases?per_page=20";
     private static final String USER_AGENT = "RuFilmTV-Android-Updater";
     private static final int REQUEST_UNKNOWN_SOURCES = 7421;
     private static final int REQUEST_INSTALL = 7422;
@@ -64,20 +66,36 @@ public final class AppUpdateManager {
         String tag;
         String body;
         AssetInfo apk;
+        boolean prerelease;
     }
 
     public static void check(Activity activity) {
         if (!isAlive(activity)) return;
+        android.content.SharedPreferences prefs = activity.getSharedPreferences("rufilm_tv_settings", Activity.MODE_PRIVATE);
+        int selected = prefs.getInt("update_channel", 0);
+        new AlertDialog.Builder(activity)
+            .setTitle("Канал обновлений")
+            .setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}, selected, (dialog, which) -> {
+                prefs.edit().putInt("update_channel", which).apply();
+                dialog.dismiss();
+                checkChannel(activity, which == 1);
+            })
+            .setNegativeButton("Отмена", null)
+            .show();
+    }
+
+    private static void checkChannel(Activity activity, boolean testChannel) {
+        if (!isAlive(activity)) return;
         ProgressDialog progress = new ProgressDialog(activity);
         progress.setTitle("RuFilmTV");
-        progress.setMessage("Проверяем GitHub Releases…");
+        progress.setMessage(testChannel ? "Проверяем тестовые сборки…" : "Проверяем стабильные обновления…");
         progress.setIndeterminate(true);
         progress.setCancelable(false);
         progress.show();
 
         EXECUTOR.execute(() -> {
             try {
-                ReleaseInfo release = fetchLatestRelease();
+                ReleaseInfo release = fetchLatestRelease(testChannel);
                 PackageInfo installed = getInstalledPackage(activity);
                 activity.runOnUiThread(() -> {
                     if (!isAlive(activity)) return;
@@ -88,9 +106,12 @@ public final class AppUpdateManager {
                 activity.runOnUiThread(() -> {
                     if (!isAlive(activity)) return;
                     progress.dismiss();
+                    String message = testChannel
+                        ? "В тестовом канале пока нет опубликованных сборок. Когда появится новая тестовая версия, она будет доступна здесь."
+                        : "В публичном репозитории пока нет опубликованных стабильных GitHub Releases.";
                     new AlertDialog.Builder(activity)
                         .setTitle("Обновлений пока нет")
-                        .setMessage("В публичном репозитории ещё нет опубликованных GitHub Releases. Проверка обновлений уже встроена. Для её работы нужно опубликовать Release с APK; приложение будет проверять SHA-256 и подпись перед установкой.")
+                        .setMessage(message)
                         .setPositiveButton("Понятно", null)
                         .show();
                 });
@@ -104,17 +125,41 @@ public final class AppUpdateManager {
         });
     }
 
-    private static ReleaseInfo fetchLatestRelease() throws Exception {
-        HttpURLConnection connection = openConnection(RELEASE_API);
+    private static ReleaseInfo fetchLatestRelease(boolean testChannel) throws Exception {
+        String endpoint = testChannel ? TEST_RELEASES_API : STABLE_RELEASE_API;
+        HttpURLConnection connection = openConnection(endpoint);
         try {
             int status = connection.getResponseCode();
             if (status == 404) throw new NoReleaseException();
             if (status != 200) throw new java.io.IOException("GitHub API вернул HTTP " + status);
-            JSONObject json = new JSONObject(readText(connection.getInputStream(), 1024 * 1024));
+            String response = readText(connection.getInputStream(), 2 * 1024 * 1024);
+            JSONObject json;
+            if (testChannel) {
+                JSONArray releases = new JSONArray(response);
+                json = null;
+                String newestPublishedAt = "";
+                for (int i = 0; i < releases.length(); i++) {
+                    JSONObject candidate = releases.optJSONObject(i);
+                    if (candidate == null || !candidate.optBoolean("prerelease", false) ||
+                        candidate.optBoolean("draft", false)) {
+                        continue;
+                    }
+                    String publishedAt = candidate.optString("published_at", "");
+                    if (publishedAt.compareTo(newestPublishedAt) > 0) {
+                        newestPublishedAt = publishedAt;
+                        json = candidate;
+                    }
+                }
+                if (json == null) throw new NoReleaseException();
+            } else {
+                json = new JSONObject(response);
+            }
+
             ReleaseInfo release = new ReleaseInfo();
             release.name = json.optString("name", "");
             release.tag = json.optString("tag_name", "");
             release.body = json.optString("body", "").trim();
+            release.prerelease = json.optBoolean("prerelease", false);
             JSONArray assets = json.optJSONArray("assets");
             if (assets == null) throw new java.io.IOException("В Release нет списка файлов.");
             for (int i = 0; i < assets.length(); i++) {
@@ -130,7 +175,7 @@ public final class AppUpdateManager {
                 release.apk = asset;
                 break;
             }
-            if (release.apk == null) throw new java.io.IOException("В последнем Release не найден APK-файл.");
+            if (release.apk == null) throw new java.io.IOException("В выбранном Release не найден APK-файл.");
             if (release.apk.url.isEmpty() || !isGithubDownloadUrl(release.apk.url))
                 throw new java.io.IOException("Ссылка на APK не прошла проверку домена GitHub.");
             if (release.apk.size <= 0L || release.apk.size > MAX_APK_BYTES)
@@ -193,8 +238,9 @@ public final class AppUpdateManager {
             "APK: " + release.apk.name + "\n\n" +
             notes + "\n\n" +
             "После загрузки приложение проверит applicationId, versionCode/versionName, SHA-256 и сертификат подписи. Затем откроется штатный установщик Android с подтверждением.";
+        String dialogTitle = release.prerelease ? "Тестовая сборка: " + releaseTitle : releaseTitle;
         new AlertDialog.Builder(activity)
-            .setTitle(releaseTitle.isEmpty() ? "Доступен GitHub Release" : releaseTitle)
+            .setTitle(dialogTitle.isEmpty() ? "Доступен GitHub Release" : dialogTitle)
             .setMessage(message)
             .setPositiveButton("Скачать и установить", (dialog, which) ->
                 downloadVerifyAndInstall(activity, release))
