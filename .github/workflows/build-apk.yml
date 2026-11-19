@@ -105,7 +105,8 @@ jobs:
           grep -F 'setMediaPlaybackRequiresUserGesture(false)' "$SRC"
           grep -F 'isKnownAdRequest(String url)' patches/patch_player.py
           grep -F 'isKnownAdRequest(requestUrl)' patches/patch_player.py
-          grep -F "d.classList.add('rf-adfilter-enabled');" patches/patch_player.py
+          grep -F "d.classList.toggle('rf-adfilter-enabled'," patches/patch_player.py
+          grep -F '(isAdFilteringEnabled() && (isKnownAdRequest(requestUrl) || isAdRequest(requestUrl)))' patches/patch_player.py
           grep -F 'addFullscreenControls();' patches/patch_player.py
           grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
           grep -F 'assistantTopBar.setVisibility(View.GONE)' patches/NativePlayerActivity.java
