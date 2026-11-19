@@ -83,7 +83,7 @@ jobs:
           grep -F 'moreButton=button("Ещё",false)' "$SRC"
           grep -F 'showAdFilterDialog();' "$SRC"
           grep -F '.setItems(choices' "$SRC"
-          grep -F 'isAdFilteringEnabled() && request != null' "$SRC"
+          grep -F 'isKnownAdRequest(requestUrl)' "$SRC"
           grep -F 'isAdFilteringEnabled() && isAdRequest(url)' "$SRC"
           grep -F 'rf-no-adfilter' "$SRC"
           grep -F "classList.toggle('rf-no-adfilter'" "$SRC"
