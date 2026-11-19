@@ -10,6 +10,9 @@ on:
         type: string
   push:
     branches: [fix/updater-channel-and-ad-filter-toggle, fix/vk-first-tap-layout-ad-target]
+    paths:
+      - 'RuFilmTV-3.0.0-project.zip'
+      - 'patches/**'
 
 permissions:
   contents: write
