@@ -26,12 +26,99 @@ anchor = "    // ABP-style network filtering; the cinema origin and ordinary med
 capture = '''    // Never let the ad filter intercept actual video manifests or media segments.
     private boolean isRuFilmMediaRequest(String url) {
         if (url == null) return false;
-        String path = Uri.parse(url).getPath();
+        Uri parsed = Uri.parse(url);
+        String path = parsed.getPath();
         if (path == null) path = url;
         path = path.toLowerCase(Locale.ROOT);
+        String host = parsed.getHost();
+        if (host == null) return false;
+        String h = host.toLowerCase(Locale.ROOT);
+        // VK/OK player bootstrap, API and media must never be mistaken for ad requests.
+        boolean vkHost = h.equals("vk.com") || h.endsWith(".vk.com") ||
+            h.equals("vk.ru") || h.endsWith(".vk.ru") ||
+            h.equals("vkvideo.ru") || h.endsWith(".vkvideo.ru") ||
+            h.equals("ok.ru") || h.endsWith(".ok.ru") ||
+            h.equals("cdn-vk.ru") || h.endsWith(".cdn-vk.ru") ||
+            h.equals("userapi.com") || h.endsWith(".userapi.com") ||
+            h.equals("mycdn.me") || h.endsWith(".mycdn.me") ||
+            h.equals("vkuser.net") || h.endsWith(".vkuser.net") ||
+            h.equals("vk-cdn.net") || h.endsWith(".vk-cdn.net") ||
+            h.equals("vkuseraudio.net") || h.endsWith(".vkuseraudio.net");
+        if (vkHost) return true; // Preserve all first-party player bootstrap/API assets on VK/OK hosts.
+        if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") ||
+                h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru") ||
+                h.endsWith(".vk-cdn.net") || h.endsWith(".vkuseraudio.net")) return true;
+        if (h.equals("st.okcdn.ru") || h.endsWith(".st.okcdn.ru") || h.endsWith(".vkuser.net") || h.endsWith(".okcdn.ru")) {
+            String[] mediaExtensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
+            for (String ext : mediaExtensions) if (path.endsWith(ext)) return true;
+        }
         String[] extensions = {".m3u8", ".mpd", ".ts", ".m4s", ".mp4", ".m4v", ".aac", ".mp3", ".webm", ".key", ".vtt", ".cmfv", ".cmfa"};
         for (String ext : extensions) if (path.endsWith(ext)) return true;
         return false;
+    }
+
+    private boolean isKnownAdRequest(String url) {
+        if (url == null || isRuFilmMediaRequest(url)) return false;
+        Uri u = Uri.parse(url);
+        String h = u.getHost();
+        if (h == null) return false;
+        h = h.toLowerCase(Locale.ROOT);
+        String path = u.getPath() == null ? "" : u.getPath().toLowerCase(Locale.ROOT);
+        return h.equals("digitalcaramel.com") || h.endsWith(".digitalcaramel.com") ||
+            h.equals("vak345.com") || h.endsWith(".vak345.com") ||
+            h.equals("qepolax.com") || h.endsWith(".qepolax.com") ||
+            (h.equals("yandex.ru") && path.equals("/ads/system/context.js"));
+    }
+
+    // Recover a user's first Play tap if VK attaches the stream asynchronously.
+    private void installVkFirstTapSupport() {
+        if (web == null) return;
+        final String script = "(function(){try{var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}" +
+            "function bind(d){if(!d||d.__rufilmFirstTapInstalled)return;d.__rufilmFirstTapInstalled=true;" +
+            "function arm(v){if(!v||v.__rufilmFirstTapBound)return;v.__rufilmFirstTapBound=true;" +
+            "function start(){if(!v.__rufilmPlayIntentUntil||Date.now()>v.__rufilmPlayIntentUntil||!v.paused||v.readyState<2||!v.currentSrc)return;try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}}" +
+            "['loadeddata','canplay','canplaythrough','loadedmetadata'].forEach(function(n){v.addEventListener(n,start);});" +
+            "d.addEventListener('click',function(e){var t=e.target,hit=t===v||v.contains(t);if(!hit){var el=t&&t.closest?t.closest('button,[role=button],[class*=play],[aria-label*=play i],[title*=play i]'):null;" +
+            "if(el){var root=v;for(var k=0;k<7&&root;k++,root=root.parentElement){if(root.contains(el)){hit=true;break;}}}}" +
+            "if(!hit)return;v.__rufilmPlayIntentUntil=Date.now()+8000;[80,300,700,1300,2200].forEach(function(ms){setTimeout(start,ms);});},true);}" +
+            "function scan(){[].slice.call(d.querySelectorAll('video')).forEach(arm);}" +
+            "scan();if(d.documentElement&&!d.__rufilmFirstTapObserver){var ob=new MutationObserver(scan);ob.observe(d.documentElement,{childList:true,subtree:true});d.__rufilmFirstTapObserver=ob;}}" +
+            "docs.forEach(bind);return true;}catch(e){return false;}})();";
+        web.evaluateJavascript(script, null);
+    }
+
+    private void installAdCosmeticFilters() {
+        if (web == null) return;
+        final String js = "(function(){try{var id='rufilm-ad-cosmetic-style';var css=" +
+            "'html.rf-adfilter-enabled .adsbygoogle,html.rf-adfilter-enabled [id^=div-gpt-ad],html.rf-adfilter-enabled iframe[src*=kaspi],html.rf-adfilter-enabled iframe[src*=digitalcaramel],html.rf-adfilter-enabled iframe[src*=yandex],html.rf-adfilter-enabled iframe[src*=vak345],html.rf-adfilter-enabled iframe[src*=qepolax],html.rf-adfilter-enabled iframe[src*=doubleclick],html.rf-adfilter-enabled iframe[src*=adservice],html.rf-adfilter-enabled iframe[src*=adnxs],html.rf-adfilter-enabled iframe[src*=googlesyndication],html.rf-adfilter-enabled a[href*=kaspi],html.rf-adfilter-enabled img[src*=kaspi],html.rf-adfilter-enabled [data-href*=kaspi]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important}'" +
+            ";var st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}st.textContent=css;" +
+            "function playerNode(e){if(!e)return false;try{if(e.matches&&e.matches('video,iframe[src*=vk],iframe[src*=\\\"ok.ru\\\"]'))return true;return !!e.querySelector('video,iframe[src*=vk],iframe[src*=\\\"ok.ru\\\"]');}catch(x){return false;}}" +
+            "function restore(){document.querySelectorAll('[data-rufilm-ad-hidden=\\\"1\\\"]').forEach(function(e){var d=e.getAttribute('data-rufilm-old-display')||'',dp=e.getAttribute('data-rufilm-old-display-priority')||'',p=e.getAttribute('data-rufilm-old-pointer')||'',pp=e.getAttribute('data-rufilm-old-pointer-priority')||'';if(d)e.style.setProperty('display',d,dp);else e.style.removeProperty('display');if(p)e.style.setProperty('pointer-events',p,pp);else e.style.removeProperty('pointer-events');['data-rufilm-ad-hidden','data-rufilm-old-display','data-rufilm-old-display-priority','data-rufilm-old-pointer','data-rufilm-old-pointer-priority'].forEach(function(a){e.removeAttribute(a);});});}" +
+            "function hideOne(e){if(playerNode(e))return;if(!e.hasAttribute('data-rufilm-ad-hidden')){e.setAttribute('data-rufilm-ad-hidden','1');e.setAttribute('data-rufilm-old-display',e.style.getPropertyValue('display'));e.setAttribute('data-rufilm-old-display-priority',e.style.getPropertyPriority('display'));e.setAttribute('data-rufilm-old-pointer',e.style.getPropertyValue('pointer-events'));e.setAttribute('data-rufilm-old-pointer-priority',e.style.getPropertyPriority('pointer-events'));}e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');}" +
+            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled')){restore();return;}var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],[class*=sidebar-ad],[id*=sidebar-ad],.left-ad,.ad-left,.sticky-ad,.ads,.ad,.ad-box,.ad-wrapper,.adblock,[id^=ad_],[class^=ad_],iframe[src*=kaspi],iframe[src*=digitalcaramel],iframe[src*=yandex],iframe[src*=vak345],iframe[src*=qepolax],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication],a[href*=kaspi],img[src*=kaspi],[data-href*=kaspi]';" +
+            "document.querySelectorAll(q).forEach(function(e){if(playerNode(e))return;var n=((e.id||'')+' '+(typeof e.className==='string'?e.className:'')).toLowerCase();if(!/(^|[-_\\\\s])(ad|ads|advert|banner|sponsor)([-_\\\\s]|$)/.test(n)&&!/(advert|ad-container|ad-slot|banner-ad|sponsor)/.test(n))return;hideOne(e);});" +
+            "document.querySelectorAll('iframe[src*=kaspi],a[href*=kaspi],img[src*=kaspi],[data-href*=kaspi]').forEach(function(e){var p=e;for(var k=0;k<5&&p&&p!==document.body&&p!==document.documentElement;k++,p=p.parentElement){if(playerNode(p))break;var r=p.getBoundingClientRect(),st=getComputedStyle(p);if((st.position==='fixed'||st.position==='absolute')&&r.width>100&&r.height>50){hideOne(p);break;}}});}" +
+            "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});}" +
+            "}catch(e){}})();";
+        web.evaluateJavascript(js, null);
+    }
+
+    private void installVkFrameSupport() {
+        if (web == null) return;
+        final String js = "(function(){try{" +
+            "function collect(w,a,depth){if(depth>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,depth+1);}catch(e){}}catch(e){}}" +
+            "function scan(){var ds=[];collect(window,ds,0);ds.forEach(function(d){try{var w=d.defaultView||window;if(!d.__rufilmFrameClickHook){d.__rufilmFrameClickHook=true;" +
+            "d.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IFRAME'&&/vk|ok\\\\.ru/i.test(t.src||'')){window.__rufilmVkIntentUntil=Date.now()+10000;}},true);}" +
+            "[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmFramePlayHook)return;v.__rufilmFramePlayHook=true;" +
+            "function start(){var until=Math.max(w.__rufilmVkIntentUntil||0,window.__rufilmVkIntentUntil||0);if(Date.now()>until||!v.paused||v.readyState<2||!v.currentSrc)return;try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}}" +
+            "['loadeddata','canplay','canplaythrough','loadedmetadata'].forEach(function(n){v.addEventListener(n,start);});" +
+            "d.addEventListener('click',function(e){var t=e.target;if(t===v||(t&&v.contains(t))){w.__rufilmVkIntentUntil=Date.now()+10000;[100,350,800,1500].forEach(function(ms){setTimeout(start,ms);});}},true);" +
+            "});if(!d.__rufilmFrameObserver&&d.documentElement){d.__rufilmFrameObserver=new MutationObserver(function(){scan();});d.__rufilmFrameObserver.observe(d.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}});}" +
+            "window.addEventListener('message',function(e){try{if(!/vk|ok\\\\.ru/i.test(e.origin||''))return;var x=e.data;if(typeof x==='string'){try{x=JSON.parse(x);}catch(z){return;}}" +
+            "var found=null;function walk(o,k){if(!o||typeof o!=='object'||k>5)return;Object.keys(o).forEach(function(n){var v=o[n];if(/^(currentTime|current_time|time|position)$/i.test(n)&&typeof v==='number'&&isFinite(v)&&v>0&&v<86400)found=v;else if(v&&typeof v==='object')walk(v,k+1);});}walk(x,0);if(found!==null)window.__rufilmVkTime=found;}catch(z){}},true);" +
+            "scan();if(!window.__rufilmFrameRootObserver&&document.documentElement){window.__rufilmFrameRootObserver=new MutationObserver(scan);window.__rufilmFrameRootObserver.observe(document.documentElement,{childList:true,subtree:true});}return true;}catch(e){return false;}})();";
+        web.evaluateJavascript(js, null);
     }
 
     // Capture HLS/DASH manifests and the request headers used by the WebView.
@@ -110,17 +197,23 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                         "var season=pick(/season|сезон/),episode=pick(/episode|серия|эпизод/);" +
                         "if((!season||!episode)&&c.length>=2){season=season||c[0];episode=episode||(c[0]===season?c[1]:c[0]);}" +
                         "var sels=[];if(season)sels.push(season);if(episode&&episode!==season)sels.push(episode);" +
-                        "var v=document.querySelector('video');if(!v){for(var j=1;j<docs.length&&!v;j++)try{v=docs[j].querySelector('video');}catch(e){}}" +
-                        "return JSON.stringify({selectors:sels,time:v&&isFinite(v.currentTime)?v.currentTime:0});})()";
+                        "var best=null,bestScore=-1;docs.forEach(function(d,di){try{[].slice.call(d.querySelectorAll('video')).forEach(function(v){var r=v.getBoundingClientRect(),cs=d.defaultView.getComputedStyle(v);var visible=r.width>120&&r.height>70&&r.bottom>0&&r.right>0&&cs.display!=='none'&&cs.visibility!=='hidden';var score=(v.paused?0:100)+(v.readyState>=2?30:0)+(v.videoWidth>0?20:0)+(v.currentTime>0?15:0)+(visible?20:0);if(score>bestScore){bestScore=score;best={video:v,frame:frameIds[di],score:score};}});}catch(e){}});" +
+                        "docs.forEach(function(d){var x=d.defaultView||window;x.__rufilmActiveVideo=null;x.__rufilmSavedPlayerLayout=null;});var v=best&&best.video;if(v){var w=v.ownerDocument.defaultView;w.__rufilmActiveVideo=v;var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});if(n===v.ownerDocument.documentElement)break;n=n.parentElement;}w.__rufilmSavedPlayerLayout={video:v,nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused,time:v.currentTime};}var tm=v&&isFinite(v.currentTime)?v.currentTime:0;if(tm<0.5&&window.__rufilmVkTime)tm=window.__rufilmVkTime;" +
+                        "return JSON.stringify({selectors:sels,time:tm,frameIndex:best?best.frame:-1,score:bestScore,playing:!!(v&&!v.paused)});})()";
                     web.evaluateJavascript(snapshotScript, value -> {
                         try {
                             Object decoded = new org.json.JSONTokener(value == null ? "{}" : value).nextValue();
                             org.json.JSONObject snapshot = new org.json.JSONObject(String.valueOf(decoded));
                             org.json.JSONArray selectors = snapshot.optJSONArray("selectors");
+                            long startMs = (long)(snapshot.optDouble("time", 0.0) * 1000.0);
                             launchIntent.putExtra(NativePlayerActivity.EXTRA_EPISODE_SELECTORS, selectors == null ? "[]" : selectors.toString());
-                            launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, (long)(snapshot.optDouble("time", 0.0) * 1000.0));
+                            launchIntent.putExtra(NativePlayerActivity.EXTRA_START_POSITION_MS, startMs);
+                            android.util.Log.i("RuFilmTV", "VK fullscreen handoff snapshot: positionMs=" + startMs +
+                                " frame=" + snapshot.optInt("frameIndex", -1) +
+                                " playing=" + snapshot.optBoolean("playing", false) +
+                                " score=" + snapshot.optInt("score", -1));
                         } catch (Exception ignored) { }
-                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});n=n.parentElement;}w.__rufilmSavedPlayerLayout={nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}});return true;})()", null);
+                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var w=d.defaultView||window;var v=w.__rufilmActiveVideo;if(!v)return;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});if(n===d.documentElement)break;n=n.parentElement;}w.__rufilmSavedPlayerLayout={video:v,nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused,time:v.currentTime};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}});return true;})()", null);
                         web.postDelayed(() -> {
                             try { startActivity(launchIntent); }
                             catch (Exception e) {
@@ -144,7 +237,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 '''
 once(anchor, capture+anchor, "capture methods")
 
-once('''                if (request != null && isAdRequest(request.getUrl().toString()))
+once('''                captureMediaRequest(request);
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', '''                captureMediaRequest(request);
                 if (request != null && isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString()))
                     return emptyBlockedResponse();''', "request interception")
@@ -189,11 +285,7 @@ episode_support = r'''
             "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
             "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
             "b.style.cssText='position:fixed;z-index:2147483647;width:52px;height:52px;border:1px solid rgba(255,255,255,.72);border-radius:50%;background:rgba(105,91,226,.97);box-shadow:0 4px 16px rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;opacity:.98;-webkit-tap-highlight-color:transparent;';" +
-            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var ok=false;" +
-            "try{if(window.RuFilmPlayer&&window.RuFilmPlayer.openCaptured)ok=window.RuFilmPlayer.openCaptured();}catch(x){}" +
-            "if(!ok){try{var u=v.currentSrc||v.src;if(u&&/^https?:\\/\\//i.test(u)&&window.RuFilmPlayer&&window.RuFilmPlayer.openNative)ok=window.RuFilmPlayer.openNative(String(u),String(location.href),String(navigator.userAgent));}catch(x){}}" +
-            "if(!ok){b.title='Поток ещё загружается — попробуйте через пару секунд';b.style.background='rgba(190,78,70,.98)';setTimeout(function(){b.style.background='rgba(105,91,226,.97)';},900);}" +
-            "},true);" +
+            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();try{if(v.requestFullscreen)v.requestFullscreen();else if(v.webkitEnterFullscreen)v.webkitEnterFullscreen();}catch(x){}},true);" +
             "document.body.appendChild(b);v.__rufilmFsButton=b;function place(){try{var r=v.getBoundingClientRect(),w=document.documentElement.clientWidth,h=document.documentElement.clientHeight;" +
             "var visible=!v.paused&&r.width>120&&r.height>70&&r.bottom>0&&r.top<h&&r.right>0&&r.left<w&&getComputedStyle(v).visibility!=='hidden'&&getComputedStyle(v).display!=='none';" +
             "b.style.display=visible?'flex':'none';if(visible){var x=Math.max(8,Math.min(w-60,r.left+(r.width-52)/2));var y=r.bottom+9;if(y+52>h)y=Math.max(8,r.bottom-60);b.style.left=x+'px';b.style.top=y+'px';}}catch(x){b.style.display='none';}}" +
@@ -220,8 +312,43 @@ if "MainActivity.this.installEpisodeSelectorSupport();\n                MainActi
     )
     if not page_finished:
         raise SystemExit("Could not find WebViewClient.onPageFinished for DPAD selector setup.")
-    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();"
+    insert = page_finished.group(1) + "\n                MainActivity.this.installEpisodeSelectorSupport();\n                MainActivity.this.installVkFirstTapSupport();\n                MainActivity.this.installVkFrameSupport();\n                MainActivity.this.installAdCosmeticFilters();\n                MainActivity.this.applyCleanMode();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
+
+
+# Wire the filter toggle into the existing visible filter button and every ad-filter path.
+s = s.replace('''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
+                if (request != null && isAdRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, request);
+            }''', '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
+                captureMediaRequest(request);
+                if (isAdFilteringEnabled() && request != null &&
+                        isAdRequest(request.getUrl().toString()) &&
+                        !isRuFilmMediaRequest(request.getUrl().toString()))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, request);
+            }''', 1)
+s = s.replace('''            @SuppressWarnings("deprecation")
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
+                if (isAdRequest(url)) return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, url);
+            }''', '''            @SuppressWarnings("deprecation")
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
+                if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
+                    return emptyBlockedResponse();
+                return super.shouldInterceptRequest(view, url);
+            }''', 1)
+s = s.replace('filterButton.setOnClickListener(v->updateFilterLists());',
+              'filterButton.setOnClickListener(v->showAdFilterDialog());', 1)
+s = s.replace('String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",',
+              'String[] items = {"Чистый", "Цвет", "Фильтры рекламы", "Видеоплеер",', 1)
+s = s.replace('''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("document.documentElement.classList.toggle('rf-clean',"+cleanMode+");",null);
+    }''', '''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("(function(){document.documentElement.classList.toggle('rf-clean',"+cleanMode+");document.documentElement.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");})();",null);
+    }''', 1)
+s = s.replace('html.rf-clean', 'html.rf-clean:not(.rf-no-adfilter)')
 
 p.write_text(s,encoding="utf-8")
 print("Patched",p)
@@ -311,8 +438,10 @@ bridge_fields = '''
     public static void syncOriginalPlayback(long positionMs, boolean nativeActive) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
+        final long syncPositionMs = positionMs;
         a.runOnUiThread(() -> {
-            String js = "(function(){var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}var t=" + (positionMs > 0L ? positionMs/1000.0 : -1.0) + ";docs.forEach(function(d){var v=d.querySelector('video');if(!v)return;var w=d.defaultView;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.5){try{v.currentTime=t;}catch(e){}}if(" + nativeActive + "){w.__rufilmNativeActive=true;v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';}else{w.__rufilmNativeActive=false;if(w.__rufilmSavedPlayerLayout){var z=w.__rufilmSavedPlayerLayout;z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;w.__rufilmSavedPlayerLayout=null;if(!z.paused){try{var playPromise=v.play();if(playPromise&&playPromise.catch)playPromise.catch(function(){});}catch(e){}}}}});return true;})()";
+            String js = "(function(){function collect(w,a,n){if(n>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,n+1);}catch(e){}}catch(e){}}var docs=[];collect(window,docs,0);var t=" + (syncPositionMs > 0L ? syncPositionMs/1000.0 : -1.0) + ";docs.forEach(function(d){try{var w=d.defaultView||window,z=w.__rufilmSavedPlayerLayout,v=(z&&z.video)||w.__rufilmActiveVideo;if(!v)return;if(" + nativeActive + "){w.__rufilmNativeActive=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>2){try{v.currentTime=t;}catch(e){}}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}return;}w.__rufilmNativeActive=false;if(z){z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;}var shouldPlay=z?!z.paused:true,done=false;function finishSeek(){if(done)return;done=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.currentTime=t;}catch(e){}}if(shouldPlay){try{var pp=v.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){}}w.__rufilmSavedPlayerLayout=null;}function seek(){if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.addEventListener('seeked',finishSeek,{once:true});v.currentTime=t;}catch(e){}}setTimeout(finishSeek,500);}if(v.readyState>=1)seek();else{v.addEventListener('loadedmetadata',seek,{once:true});setTimeout(seek,900);}}catch(e){}});return true;})()";
+            android.util.Log.i("RuFilmTV", "Restore original VK playback at " + syncPositionMs + " ms; nativeActive=" + nativeActive);
             a.web.evaluateJavascript(js, null);
         });
     }
@@ -328,6 +457,15 @@ if 'rufilmActiveInstance = this;' not in s:
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.requestFocus();
+                v.requestFocusFromTouch();
+            }
+            return false;
+        });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21)
             android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
@@ -353,7 +491,6 @@ else:
     @Override protected void onResume() {
         super.onResume();
         nativePlayerLaunching = false;
-        syncOriginalPlayback(0L, false);
     }
 
 ''' + s[class_end:]
@@ -411,6 +548,7 @@ fullscreen_fields = r"""
                     action == MotionEvent.ACTION_SCROLL) {
                 v.setPointerIcon(arrow);
                 revealSystemCursor();
+                showFullscreenUi();
             }
             return false;
         });
@@ -613,6 +751,12 @@ fullscreen_methods = r"""
             }).setNegativeButton("Отмена", null).show();
     }
 
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
+            showFullscreenUi();
+        return super.dispatchTouchEvent(event);
+    }
+
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         boolean handled = super.dispatchGenericMotionEvent(event);
         if (customView != null && event != null) {
@@ -622,6 +766,7 @@ fullscreen_methods = r"""
                     action == MotionEvent.ACTION_SCROLL) {
                 revealSystemCursor();
                 setSystemCursorVisible(true);
+                showFullscreenUi();
             }
         }
         return handled;
@@ -645,7 +790,8 @@ if view_anchor in s and "installFullscreenCursor(view);" not in s:
     cursor_code = (view_anchor + nl
                    + "                installFullscreenCursor(view);" + nl
                    + "                installFullscreenCursor(fullscreenContainer);" + nl
-                   + "                setSystemCursorVisible(true);")
+                   + "                setSystemCursorVisible(true);" + nl
+                   + "                addFullscreenControls();")
     s = s.replace(view_anchor, cursor_code, 1)
 
 hide_anchor = "if(customView==null)return;";
@@ -670,8 +816,8 @@ s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,
     private final int[] themeColors = {0xffd73445,0xff9b6bdb,0xff3978e8,0xff20a6d8,0xff16a6a0,0xff35a866,0xff91b832,0xffe88732,0xffdc669e,0xffc49a42};''')
 s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
 s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
-s = s.replace('playerMode = prefs.getString("player_mode", "native");',
-'''playerMode = prefs.getString("player_mode", "native");
+s = s.replace('playerMode = "original"; // Native Media3 handoff intentionally disabled; keep the site original player.',
+'''playerMode = "original"; // Keep the website's original player; Media3 handoff is disabled.
         selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
         accent = themeColors[selectedTheme];''')
 s = s.replace('''        playerButton=button("Плеер",false);playerButton.setTextSize(9);''', '''        themeButton=button("Цвет",false);themeButton.setTextSize(9);
@@ -726,6 +872,33 @@ methods = r"""
 """
 if "private void showThemeDialog()" not in s:
     s = s.replace("    private void updateFilterLists(){", methods + "\n    private void updateFilterLists(){")
+
+# User-controlled master switch for network ad filtering. Enabled by default.
+if "private boolean isAdFilteringEnabled()" not in s:
+    ad_filter_controls = r"""
+    private boolean isAdFilteringEnabled() {
+        return prefs == null || prefs.getBoolean("ad_filters_enabled", true);
+    }
+
+    private void showAdFilterDialog() {
+        boolean enabled = isAdFilteringEnabled();
+        String[] choices = {"Включить блокировку рекламы", "Отключить фильтры рекламы"};
+        new AlertDialog.Builder(this)
+            .setTitle("Фильтры рекламы")
+            .setItems(choices, (dialog, which) -> {
+                boolean turnOn = which == 0;
+                if (prefs != null) prefs.edit().putBoolean("ad_filters_enabled", turnOn).apply();
+                applyCleanMode();
+                Toast.makeText(this, turnOn ? "Блокировка рекламы включена" : "Фильтры рекламы отключены", Toast.LENGTH_LONG).show();
+            })
+            .setNegativeButton("Закрыть", null)
+            .show();
+    }
+"""
+    anchor = "    private void updateFilterLists(){"
+    if anchor not in s: raise SystemExit("Ad-filter dialog insertion anchor missing")
+    s = s.replace(anchor, ad_filter_controls + "\n" + anchor, 1)
+
 s=s.replace('''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setOnHoverListener((v, event) -> {''', '''                if (Build.VERSION.SDK_INT >= 24) {
                     view.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
@@ -741,6 +914,18 @@ s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLAC
                     });
                 }
                 fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
+
+# Keep the original HTML5/VK player in its own fullscreen surface.
+# Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
+fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}"""
+fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
+                if(customView!=null){callback.onCustomViewHidden();return;}
+                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3."""
+if fullscreen_handoff not in s:
+    if fullscreen_anchor not in s:
+        raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
+    s = s.replace(fullscreen_anchor, fullscreen_handoff, 1)
 
 # Keep the Android mouse cursor available while the WebView custom view is fullscreen.
 s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);',
@@ -770,7 +955,24 @@ _start = s.find("    private void addFullscreenControls() {")
 _end = s.find("    private void refreshFullscreenSelectors()", _start)
 if _start >= 0 and _end > _start:
     _minimal_controls = r"""    private void addFullscreenControls() {
-        // Intentionally empty: use only the original HTML5 player's fullscreen controls.
+        if (fullscreenContainer == null || fullscreenControls != null) return;
+        fullscreenControls = new FrameLayout(this);
+        fullscreenControls.setFocusable(false);
+        fullscreenControls.setClickable(false);
+        fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(12), dp(6), dp(12), dp(6));
+        bar.setBackground(shape(0xdd111316, 12));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, dp(58), Gravity.TOP | Gravity.END);
+        params.setMargins(0, dp(16), dp(18), 0);
+        fullscreenControls.addView(bar, params);
+        Button exit = button("Выйти", false);
+        exit.setContentDescription("Выйти из полноэкранного режима");
+        exit.setOnClickListener(v -> hideCustomView());
+        bar.addView(exit, new LinearLayout.LayoutParams(dp(92), dp(44)));
+        installFullscreenCursor(fullscreenControls);
+        showFullscreenUi();
     }
 
 """
@@ -854,11 +1056,11 @@ s = s.replace("web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DE
 
 # Add a compact app menu with the GitHub Release updater.
 once("private Button cleanButton, filterButton, playerButton;",
-     "private Button cleanButton, filterButton, playerButton, moreButton;",
+     "private Button cleanButton, filterButton, playerButton, moreButton, refreshButton;",
      "app menu button field")
 once('        Button search=button("⌕",true);',
-     '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        Button search=button("⌕",true);',
-     "app menu button")
+     '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        refreshButton=button("↻",false); refreshButton.setTextSize(21);\n        refreshButton.setContentDescription("Обновить страницу");\n        refreshButton.setOnClickListener(v->{ if(web!=null){ web.reload(); web.requestFocus(); } });\n        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(42),dp(42));rp.leftMargin=dp(5);header.addView(refreshButton,rp);\n        Button search=button("⌕",true);',
+     "app menu and refresh button")
 once("    private void showPlayerDialog() {",
      '''    private void showAppMenu() {
         String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
@@ -866,7 +1068,7 @@ once("    private void showPlayerDialog() {",
         new AlertDialog.Builder(this).setTitle("Ещё").setItems(items, (dialog, which) -> {
             if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
             else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
-            else if (which == 2) { if (filterButton != null) filterButton.performClick(); }
+            else if (which == 2) showAdFilterDialog();
             else if (which == 3) showPlayerDialog();
             else if (which == 4) AppUpdateManager.check(MainActivity.this);
             else if (which == 5) updateFilterLists();
@@ -901,6 +1103,48 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
         raise SystemExit("onPageFinished anchor missing")
     insert = page_finished.group(1) + "\n                MainActivity.this.installPremiumTopNavigation();"
     s = s[:page_finished.start()] + insert + s[page_finished.end():]
+
+
+# FINAL GUARDED AD-FILTER AND MEDIA-CAPTURE WIRING
+# Apply after every other transformation so later insertions cannot undo these guards.
+import re as _final_re
+_apply = '''    private void applyCleanMode(){
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+");})();",null);
+        if(cleanButton!=null){
+            cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
+            cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
+        }
+    }'''
+s, _n = _final_re.subn(r'    private void applyCleanMode\(\)\s*\{.*?\n    \}', _apply, s, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce ad-filter CSS toggle in applyCleanMode")
+_modern = r'''(@Override public WebResourceResponse shouldInterceptRequest\(WebView view, WebResourceRequest request\)\s*\{).*?(return super\.shouldInterceptRequest\(view, request\);\s*\})'''
+_modern_body = r'''\1
+                captureMediaRequest(request);
+                String requestUrl = request == null ? null : request.getUrl().toString();
+                if (requestUrl != null && !isRuFilmMediaRequest(requestUrl) &&
+                        (isAdFilteringEnabled() && (isKnownAdRequest(requestUrl) || isAdRequest(requestUrl))))
+                    return emptyBlockedResponse();
+                \2'''
+s, _n = _final_re.subn(_modern, _modern_body, s, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce modern WebView interception and manifest capture")
+_legacy = r'''(@SuppressWarnings\("deprecation"\)\s*@Override public WebResourceResponse shouldInterceptRequest\(WebView view, String url\)\s*\{).*?(return super\.shouldInterceptRequest\(view, url\);\s*\})'''
+_legacy_body = r'''\1
+                if (!isRuFilmMediaRequest(url) &&
+                        (isAdFilteringEnabled() && (isKnownAdRequest(url) || isAdRequest(url))))
+                    return emptyBlockedResponse();
+                \2'''
+s, _n = _final_re.subn(_legacy, _legacy_body, s, count=1, flags=_final_re.S)
+if _n != 1:
+    raise SystemExit("Could not enforce legacy WebView interception guard")
+
+# VK returns its playable stream asynchronously from this player API after the user presses Play.
+# Do not make WebView reject that delayed play() call as an autoplay gesture violation.
+if "setMediaPlaybackRequiresUserGesture(true)" in s:
+    s = s.replace("setMediaPlaybackRequiresUserGesture(true)", "setMediaPlaybackRequiresUserGesture(false)", 1)
+elif "setMediaPlaybackRequiresUserGesture(false)" not in s:
+    raise SystemExit("Could not locate WebView media gesture setting")
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
