@@ -1111,7 +1111,7 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
 # Apply after every other transformation so later insertions cannot undo these guards.
 import re as _final_re
 _apply = '''    private void applyCleanMode(){
-        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.add('rf-adfilter-enabled');})();",null);
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+);})();",null);
         if(cleanButton!=null){
             cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
             cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
@@ -1125,7 +1125,7 @@ _modern_body = r'''\1
                 captureMediaRequest(request);
                 String requestUrl = request == null ? null : request.getUrl().toString();
                 if (requestUrl != null && !isRuFilmMediaRequest(requestUrl) &&
-                        (isKnownAdRequest(requestUrl) || (isAdFilteringEnabled() && isAdRequest(requestUrl))))
+                        (isAdFilteringEnabled() && (isKnownAdRequest(requestUrl) || isAdRequest(requestUrl))))
                     return emptyBlockedResponse();
                 \2'''
 s, _n = _final_re.subn(_modern, _modern_body, s, count=1, flags=_final_re.S)
@@ -1134,7 +1134,7 @@ if _n != 1:
 _legacy = r'''(@SuppressWarnings\("deprecation"\)\s*@Override public WebResourceResponse shouldInterceptRequest\(WebView view, String url\)\s*\{).*?(return super\.shouldInterceptRequest\(view, url\);\s*\})'''
 _legacy_body = r'''\1
                 if (!isRuFilmMediaRequest(url) &&
-                        (isKnownAdRequest(url) || (isAdFilteringEnabled() && isAdRequest(url))))
+                        (isAdFilteringEnabled() && (isKnownAdRequest(url) || isAdRequest(url))))
                     return emptyBlockedResponse();
                 \2'''
 s, _n = _final_re.subn(_legacy, _legacy_body, s, count=1, flags=_final_re.S)
