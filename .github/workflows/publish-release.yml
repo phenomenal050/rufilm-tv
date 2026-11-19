@@ -6,13 +6,14 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.15-beta.5"
+        default: "v3.0.15-beta.18"
         type: string
   push:
     branches: [fix/updater-channel-and-ad-filter-toggle, fix/vk-first-tap-layout-ad-target]
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
+      - '.github/workflows/publish-release.yml'
 
 permissions:
   contents: write
@@ -117,9 +118,13 @@ jobs:
 
       - name: Publish GitHub Release with APK and checksum
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RUFILMTV_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
+          if ! gh auth status >/dev/null 2>&1; then
+            echo "::error::GitHub release token is unavailable."
+            exit 1
+          fi
           gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
