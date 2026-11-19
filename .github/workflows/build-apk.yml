@@ -94,6 +94,9 @@ jobs:
           grep -F 'h.endsWith(".mycdn.me")' patches/patch_player.py
           grep -F 'installVkFirstTapSupport();' "$SRC"
           grep -F 'installAdCosmeticFilters();' "$SRC"
+          grep -F 'function playerNode(e)' patches/patch_player.py
+          grep -F 'data-rufilm-ad-hidden' patches/patch_player.py
+          grep -F 'restore();return;' patches/patch_player.py
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F 'Native handoff requested start position' patches/NativePlayerActivity.java
           grep -F 'v.__rufilmPlayIntentUntil=Date.now()+8000' patches/patch_player.py
