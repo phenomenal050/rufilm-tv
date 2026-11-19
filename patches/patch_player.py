@@ -817,7 +817,7 @@ s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,
 s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
 s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
 s = s.replace('playerMode = "original"; // Native Media3 handoff intentionally disabled; keep the site original player.',
-'''playerMode = prefs.getString("player_mode", "native");
+'''playerMode = "original"; // Keep the website's original player; Media3 handoff is disabled.
         selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
         accent = themeColors[selectedTheme];''')
 s = s.replace('''        playerButton=button("Плеер",false);playerButton.setTextSize(9);''', '''        themeButton=button("Цвет",false);themeButton.setTextSize(9);
