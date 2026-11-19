@@ -47,6 +47,7 @@ public class NativePlayerActivity extends Activity {
     public static final String EXTRA_START_POSITION_MS = "start_position_ms";
 
     private ExoPlayer player;
+    private boolean fallbackToOriginalScheduled;
     private PlayerView playerView;
     private DefaultTrackSelector trackSelector;
     private Button qualityButton;
@@ -58,7 +59,7 @@ public class NativePlayerActivity extends Activity {
     private android.widget.SeekBar timelineSeek;
     private android.widget.TextView currentTimeText, durationTimeText, playPauseButton;
     private android.widget.TextView lockButton, displayButton;
-    private android.widget.LinearLayout assistantControls;
+    private android.widget.LinearLayout assistantControls, assistantTopBar;
     private boolean controlsLocked = false;
     private boolean controlsVisible = true;
     private boolean zoomMode = false;
@@ -85,6 +86,8 @@ public class NativePlayerActivity extends Activity {
     private String currentUserAgent;
     private HashMap<String, String> currentHeaders = new HashMap<>();
     private long captureBaselineForSelection = 0L;
+    private long requestedStartPositionMs = 0L;
+    private boolean startPositionApplied = false;
     private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null && !isFinishing()) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 650L); } } };
 
@@ -190,6 +193,7 @@ public class NativePlayerActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(22), dp(10), dp(22), dp(10));
         top.setBackgroundColor(0x55000000);
+        assistantTopBar = top;
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, dp(54), Gravity.TOP);
         overlay.addView(top, topParams);
         android.widget.TextView title = new android.widget.TextView(this);
@@ -198,6 +202,10 @@ public class NativePlayerActivity extends Activity {
         title.setTextSize(16);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.TextView exitFullscreen = controlText("Выход", 14);
+        exitFullscreen.setContentDescription("Выйти из полноэкранного режима");
+        top.addView(exitFullscreen, new android.widget.LinearLayout.LayoutParams(dp(76), dp(46)));
+        exitFullscreen.setOnClickListener(v -> { releasePlayer(); finish(); });
         android.widget.TextView menu = controlText("⋮", 30);
         top.addView(menu, new android.widget.LinearLayout.LayoutParams(dp(48), dp(46)));
         menu.setOnClickListener(v -> showAssistantMenu());
@@ -299,15 +307,28 @@ public class NativePlayerActivity extends Activity {
         } catch (Exception ignored) { }
         updateEpisodeButtonLabels();
         setContentView(root);
+        showAssistantControls();
 
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
         player.setMediaItem(item.build());
-        long startPosition = getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L);
-        if (startPosition > 0L) player.seekTo(startPosition);
+        requestedStartPositionMs = Math.max(0L, getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L));
+        android.util.Log.i("RuFilmTV", "Native handoff requested start position: " + requestedStartPositionMs + " ms");
         player.addListener(new Player.Listener() {
+            @Override public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState == Player.STATE_READY && !startPositionApplied) {
+                    startPositionApplied = true;
+                    long duration = player.getDuration();
+                    long target = requestedStartPositionMs;
+                    if (target > 0L && (duration == C.TIME_UNSET || duration <= 0L || target < duration)) {
+                        player.seekTo(target);
+                        android.util.Log.i("RuFilmTV", "Native player seek applied: " + target + " ms");
+                    }
+                    player.play();
+                }
+            }
             @Override public void onPlayerError(androidx.media3.common.PlaybackException error) {
                 String detail = "Ошибка потока, код: " + error.errorCode;
                 Throwable cause = error.getCause();
@@ -324,13 +345,23 @@ public class NativePlayerActivity extends Activity {
                 }
                 android.util.Log.e("RuFilmTV", "Media3 playback failed: " + error.getMessage(), error);
                 Toast.makeText(NativePlayerActivity.this, detail, Toast.LENGTH_LONG).show();
+                // A failed native handoff must never strand the viewer on a black screen.
+                // Return to MainActivity, which restores and resumes the original HTML5 player.
+                if (!fallbackToOriginalScheduled) {
+                    fallbackToOriginalScheduled = true;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        if (!isFinishing()) {
+                            android.util.Log.w("RuFilmTV", "Native playback failed; returning to original WebView player");
+                            finish();
+                        }
+                    }, 2200L);
+                }
             }
             @Override public void onTracksChanged(androidx.media3.common.Tracks tracks) {
                 if (qualityButton != null) qualityButton.setEnabled(hasVideoTracks());
             }
         });
         player.prepare();
-        player.play();
         syncHandler.postDelayed(syncRunnable, 1200L);
         assistantHandler.post(updateTimeline);
         scheduleAssistantHide();
@@ -576,20 +607,36 @@ public class NativePlayerActivity extends Activity {
         if (assistantControls == null) return;
         controlsVisible = true;
         assistantControls.setVisibility(View.VISIBLE);
+        if (assistantTopBar != null) assistantTopBar.setVisibility(View.VISIBLE);
         scheduleAssistantHide();
     }
     private void hideAssistantControls() {
         if (assistantControls == null || controlsLocked) return;
         controlsVisible = false;
         assistantControls.setVisibility(View.GONE);
+        if (assistantTopBar != null) assistantTopBar.setVisibility(View.GONE);
     }
     private void scheduleAssistantHide() {
         assistantHandler.removeCallbacks(hideAssistantRunnable);
-        assistantHandler.postDelayed(hideAssistantRunnable, 4500L);
+        assistantHandler.postDelayed(hideAssistantRunnable, 5000L);
     }
     private final Runnable hideAssistantRunnable = () -> {
-        if (!controlsLocked && player != null && player.isPlaying()) hideAssistantControls();
+        if (!controlsLocked && player != null) hideAssistantControls();
     };
+
+    @Override public void onUserInteraction() {
+        super.onUserInteraction();
+        if (assistantControls != null && player != null) showAssistantControls();
+    }
+
+    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        if (event != null && (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER ||
+                event.getAction() == android.view.MotionEvent.ACTION_HOVER_MOVE ||
+                event.getAction() == android.view.MotionEvent.ACTION_SCROLL)) {
+            if (assistantControls != null && player != null) showAssistantControls();
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
 
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
