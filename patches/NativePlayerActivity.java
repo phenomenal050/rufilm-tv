@@ -59,7 +59,7 @@ public class NativePlayerActivity extends Activity {
     private android.widget.SeekBar timelineSeek;
     private android.widget.TextView currentTimeText, durationTimeText, playPauseButton;
     private android.widget.TextView lockButton, displayButton;
-    private android.widget.LinearLayout assistantControls;
+    private android.widget.LinearLayout assistantControls, assistantTopBar;
     private boolean controlsLocked = false;
     private boolean controlsVisible = true;
     private boolean zoomMode = false;
@@ -193,6 +193,7 @@ public class NativePlayerActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(22), dp(10), dp(22), dp(10));
         top.setBackgroundColor(0x55000000);
+        assistantTopBar = top;
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, dp(54), Gravity.TOP);
         overlay.addView(top, topParams);
         android.widget.TextView title = new android.widget.TextView(this);
@@ -201,6 +202,10 @@ public class NativePlayerActivity extends Activity {
         title.setTextSize(16);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.TextView exitFullscreen = controlText("Выход", 14);
+        exitFullscreen.setContentDescription("Выйти из полноэкранного режима");
+        top.addView(exitFullscreen, new android.widget.LinearLayout.LayoutParams(dp(76), dp(46)));
+        exitFullscreen.setOnClickListener(v -> { releasePlayer(); finish(); });
         android.widget.TextView menu = controlText("⋮", 30);
         top.addView(menu, new android.widget.LinearLayout.LayoutParams(dp(48), dp(46)));
         menu.setOnClickListener(v -> showAssistantMenu());
@@ -601,20 +606,36 @@ public class NativePlayerActivity extends Activity {
         if (assistantControls == null) return;
         controlsVisible = true;
         assistantControls.setVisibility(View.VISIBLE);
+        if (assistantTopBar != null) assistantTopBar.setVisibility(View.VISIBLE);
         scheduleAssistantHide();
     }
     private void hideAssistantControls() {
         if (assistantControls == null || controlsLocked) return;
         controlsVisible = false;
         assistantControls.setVisibility(View.GONE);
+        if (assistantTopBar != null) assistantTopBar.setVisibility(View.GONE);
     }
     private void scheduleAssistantHide() {
         assistantHandler.removeCallbacks(hideAssistantRunnable);
-        assistantHandler.postDelayed(hideAssistantRunnable, 4500L);
+        assistantHandler.postDelayed(hideAssistantRunnable, 5000L);
     }
     private final Runnable hideAssistantRunnable = () -> {
-        if (!controlsLocked && player != null && player.isPlaying()) hideAssistantControls();
+        if (!controlsLocked && player != null) hideAssistantControls();
     };
+
+    @Override public void onUserInteraction() {
+        super.onUserInteraction();
+        if (assistantControls != null && player != null) showAssistantControls();
+    }
+
+    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        if (event != null && (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER ||
+                event.getAction() == android.view.MotionEvent.ACTION_HOVER_MOVE ||
+                event.getAction() == android.view.MotionEvent.ACTION_SCROLL)) {
+            if (assistantControls != null && player != null) showAssistantControls();
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
 
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
