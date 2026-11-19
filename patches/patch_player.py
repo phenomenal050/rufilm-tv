@@ -57,6 +57,19 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         return false;
     }
 
+    private boolean isKnownAdRequest(String url) {
+        if (url == null || isRuFilmMediaRequest(url)) return false;
+        Uri u = Uri.parse(url);
+        String h = u.getHost();
+        if (h == null) return false;
+        h = h.toLowerCase(Locale.ROOT);
+        String path = u.getPath() == null ? "" : u.getPath().toLowerCase(Locale.ROOT);
+        return h.equals("digitalcaramel.com") || h.endsWith(".digitalcaramel.com") ||
+            h.equals("vak345.com") || h.endsWith(".vak345.com") ||
+            h.equals("qepolax.com") || h.endsWith(".qepolax.com") ||
+            (h.equals("yandex.ru") && path.equals("/ads/system/context.js"));
+    }
+
     // Recover a user's first Play tap if VK attaches the stream asynchronously.
     private void installVkFirstTapSupport() {
         if (web == null) return;
@@ -77,10 +90,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private void installAdCosmeticFilters() {
         if (web == null) return;
         final String js = "(function(){try{var id='rufilm-ad-cosmetic-style';var css=" +
-            "'html.rf-adfilter-enabled .adsbygoogle,html.rf-adfilter-enabled [id^=div-gpt-ad],html.rf-adfilter-enabled [class*=advert],html.rf-adfilter-enabled [id*=advert],html.rf-adfilter-enabled [class*=ad-container],html.rf-adfilter-enabled [id*=ad-container],html.rf-adfilter-enabled [class*=ad-slot],html.rf-adfilter-enabled [id*=ad-slot],html.rf-adfilter-enabled [class*=banner-ad],html.rf-adfilter-enabled [id*=banner-ad],html.rf-adfilter-enabled [class*=sponsor],html.rf-adfilter-enabled [id*=sponsor],html.rf-adfilter-enabled [class*=sidebar-ad],html.rf-adfilter-enabled [id*=sidebar-ad],html.rf-adfilter-enabled .left-ad,html.rf-adfilter-enabled .ad-left,html.rf-adfilter-enabled .sticky-ad,html.rf-adfilter-enabled iframe[src*=kaspi.kz],html.rf-adfilter-enabled iframe[src*=digitalcaramel],html.rf-adfilter-enabled iframe[src*=yandex],html.rf-adfilter-enabled iframe[src*=vak345],html.rf-adfilter-enabled iframe[src*=qepolax],html.rf-adfilter-enabled iframe[src*=doubleclick],html.rf-adfilter-enabled iframe[src*=adservice],html.rf-adfilter-enabled iframe[src*=adnxs],html.rf-adfilter-enabled iframe[src*=googlesyndication]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important}'" +
+            "'html.rf-adfilter-enabled .adsbygoogle,html.rf-adfilter-enabled [id^=div-gpt-ad],html.rf-adfilter-enabled [class*=advert],html.rf-adfilter-enabled [id*=advert],html.rf-adfilter-enabled [class*=ad-container],html.rf-adfilter-enabled [id*=ad-container],html.rf-adfilter-enabled [class*=ad-slot],html.rf-adfilter-enabled [id*=ad-slot],html.rf-adfilter-enabled [class*=banner-ad],html.rf-adfilter-enabled [id*=banner-ad],html.rf-adfilter-enabled [class*=sponsor],html.rf-adfilter-enabled [id*=sponsor],html.rf-adfilter-enabled [class*=sidebar-ad],html.rf-adfilter-enabled [id*=sidebar-ad],html.rf-adfilter-enabled .left-ad,html.rf-adfilter-enabled .ad-left,html.rf-adfilter-enabled .sticky-ad,html.rf-adfilter-enabled iframe[src*=kaspi.kz],html.rf-adfilter-enabled iframe[src*=digitalcaramel],html.rf-adfilter-enabled iframe[src*=yandex],html.rf-adfilter-enabled iframe[src*=vak345],html.rf-adfilter-enabled iframe[src*=qepolax],html.rf-adfilter-enabled iframe[src*=doubleclick],html.rf-adfilter-enabled iframe[src*=adservice],html.rf-adfilter-enabled iframe[src*=adnxs],html.rf-adfilter-enabled iframe[src*=googlesyndication],html.rf-adfilter-enabled a[href*=kaspi],html.rf-adfilter-enabled img[src*=kaspi],html.rf-adfilter-enabled [data-href*=kaspi]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important}'" +
             ";var st=document.getElementById(id);if(!st){st=document.createElement('style');st.id=id;(document.head||document.documentElement).appendChild(st);}st.textContent=css;" +
-            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],[class*=sidebar-ad],[id*=sidebar-ad],.left-ad,.ad-left,.sticky-ad,.ads,.ad,.ad-box,.ad-wrapper,.adblock,[id^=ad_],[class^=ad_],iframe[src*=kaspi.kz],iframe[src*=digitalcaramel],iframe[src*=yandex],iframe[src*=vak345],iframe[src*=qepolax],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication]';" +
-            "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;var n=((e.id||'')+' '+(typeof e.className==='string'?e.className:'')).toLowerCase();if(!/(^|[-_\\\\s])(ad|ads|advert|banner|sponsor)([-_\\\\s]|$)/.test(n)&&!/(advert|ad-container|ad-slot|banner-ad|sponsor)/.test(n))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});}" +
+            "function hide(){if(!document.documentElement.classList.contains('rf-adfilter-enabled'))return;var q='[class*=advert],[id*=advert],[class*=ad-container],[id*=ad-container],[class*=ad-slot],[id*=ad-slot],[class*=banner-ad],[id*=banner-ad],[class*=sponsor],[id*=sponsor],[class*=sidebar-ad],[id*=sidebar-ad],.left-ad,.ad-left,.sticky-ad,.ads,.ad,.ad-box,.ad-wrapper,.adblock,[id^=ad_],[class^=ad_],iframe[src*=kaspi.kz],iframe[src*=digitalcaramel],iframe[src*=yandex],iframe[src*=vak345],iframe[src*=qepolax],iframe[src*=doubleclick],iframe[src*=adservice],iframe[src*=adnxs],iframe[src*=googlesyndication],a[href*=kaspi],img[src*=kaspi],[data-href*=kaspi]';" +
+            "document.querySelectorAll(q).forEach(function(e){if(e.querySelector('video,iframe[src*=vk],iframe[src*=ok.ru]'))return;var n=((e.id||'')+' '+(typeof e.className==='string'?e.className:'')).toLowerCase();if(!/(^|[-_\\\\s])(ad|ads|advert|banner|sponsor)([-_\\\\s]|$)/.test(n)&&!/(advert|ad-container|ad-slot|banner-ad|sponsor)/.test(n))return;e.style.setProperty('display','none','important');e.style.setProperty('pointer-events','none','important');});document.querySelectorAll('iframe[src*=kaspi],a[href*=kaspi],img[src*=kaspi],[data-href*=kaspi]').forEach(function(e){var p=e;for(var k=0;k<5&&p&&p!==document.body&&p!==document.documentElement;k++,p=p.parentElement){var r=p.getBoundingClientRect(),st=getComputedStyle(p);if((st.position==='fixed'||st.position==='absolute')&&r.width>100&&r.height>50){p.style.setProperty('display','none','important');p.style.setProperty('pointer-events','none','important');break;}}});}" +
             "hide();if(!window.__rufilmAdCosmeticObserver){var t=0;window.__rufilmAdCosmeticObserver=new MutationObserver(function(){if(t)return;t=1;setTimeout(function(){t=0;hide();},250);});window.__rufilmAdCosmeticObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(js, null);
@@ -531,6 +544,7 @@ fullscreen_fields = r"""
                     action == MotionEvent.ACTION_SCROLL) {
                 v.setPointerIcon(arrow);
                 revealSystemCursor();
+                showFullscreenUi();
             }
             return false;
         });
@@ -733,6 +747,12 @@ fullscreen_methods = r"""
             }).setNegativeButton("Отмена", null).show();
     }
 
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
+            showFullscreenUi();
+        return super.dispatchTouchEvent(event);
+    }
+
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         boolean handled = super.dispatchGenericMotionEvent(event);
         if (customView != null && event != null) {
@@ -742,6 +762,7 @@ fullscreen_methods = r"""
                     action == MotionEvent.ACTION_SCROLL) {
                 revealSystemCursor();
                 setSystemCursorVisible(true);
+                showFullscreenUi();
             }
         }
         return handled;
@@ -765,7 +786,8 @@ if view_anchor in s and "installFullscreenCursor(view);" not in s:
     cursor_code = (view_anchor + nl
                    + "                installFullscreenCursor(view);" + nl
                    + "                installFullscreenCursor(fullscreenContainer);" + nl
-                   + "                setSystemCursorVisible(true);")
+                   + "                setSystemCursorVisible(true);" + nl
+                   + "                addFullscreenControls();")
     s = s.replace(view_anchor, cursor_code, 1)
 
 hide_anchor = "if(customView==null)return;";
@@ -935,7 +957,24 @@ _start = s.find("    private void addFullscreenControls() {")
 _end = s.find("    private void refreshFullscreenSelectors()", _start)
 if _start >= 0 and _end > _start:
     _minimal_controls = r"""    private void addFullscreenControls() {
-        // Intentionally empty: use only the original HTML5 player's fullscreen controls.
+        if (fullscreenContainer == null || fullscreenControls != null) return;
+        fullscreenControls = new FrameLayout(this);
+        fullscreenControls.setFocusable(false);
+        fullscreenControls.setClickable(false);
+        fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(12), dp(6), dp(12), dp(6));
+        bar.setBackground(shape(0xdd111316, 12));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, dp(58), Gravity.TOP | Gravity.END);
+        params.setMargins(0, dp(16), dp(18), 0);
+        fullscreenControls.addView(bar, params);
+        Button exit = button("Выйти", false);
+        exit.setContentDescription("Выйти из полноэкранного режима");
+        exit.setOnClickListener(v -> hideCustomView());
+        bar.addView(exit, new LinearLayout.LayoutParams(dp(92), dp(44)));
+        installFullscreenCursor(fullscreenControls);
+        showFullscreenUi();
     }
 
 """
@@ -1072,7 +1111,7 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
 # Apply after every other transformation so later insertions cannot undo these guards.
 import re as _final_re
 _apply = '''    private void applyCleanMode(){
-        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+");})();",null);
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.add('rf-adfilter-enabled');})();",null);
         if(cleanButton!=null){
             cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
             cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
