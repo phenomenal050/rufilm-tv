@@ -4,7 +4,7 @@ name: Build RuFilmTV APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'feature/public-test-channel', 'test/vk-diagnostics', 'fix/updater-channel-and-ad-filter-toggle', 'fix/vk-first-tap-layout-ad-target']
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
@@ -74,6 +74,35 @@ jobs:
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+      - name: Verify original VK player mode, menus and ad-filter toggle
+        run: |
+          set -euo pipefail
+          SRC="rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java"
+          UPD="rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java"
+          grep -F 'moreButton=button("Ещё",false)' "$SRC"
+          grep -F 'showAdFilterDialog();' "$SRC"
+          grep -F '.setItems(choices' "$SRC"
+          grep -F 'installVkFirstTapSupport();' "$SRC"
+          grep -F 'installVkFrameSupport();' "$SRC"
+          grep -F 'installAdCosmeticFilters();' "$SRC"
+          grep -F 'isKnownAdRequest(String url)' patches/patch_player.py
+          grep -F 'isKnownAdRequest(requestUrl)' patches/patch_player.py
+          grep -F 'function playerNode(e)' patches/patch_player.py
+          grep -F 'restore();return;' patches/patch_player.py
+          grep -F 'playerMode = "original"' patches/patch_player.py
+          grep -F 'Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.' patches/patch_player.py
+          grep -F 'addFullscreenControls();' patches/patch_player.py
+          grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
+          grep -F 'refreshButton=button("↻",false)' "$SRC"
+          grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
+          cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
+      - name: Upload patched source for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: RuFilmTV-patched-source-inspection
+          path: ${{ runner.temp }}/RuFilmTV-patched-MainActivity.java
+          if-no-files-found: error
       - name: Resolve app version
         run: |
           set -euo pipefail
