@@ -111,25 +111,28 @@ new_intercept = '''            @Override public WebResourceResponse shouldInterc
 if old_intercept in source:
     replace_once(old_intercept, new_intercept, "request interception diagnostics")
 else:
-    toggle_filter = '''                if (isAdFilteringEnabled() && request != null &&
-                        isAdRequest(request.getUrl().toString()) &&
-                        !isRuFilmMediaRequest(request.getUrl().toString()))
+    toggle_filter = '''                String requestUrl = request == null ? null : request.getUrl().toString();
+                if (requestUrl != null && !isRuFilmMediaRequest(requestUrl) &&
+                        (isKnownAdRequest(requestUrl) || (isAdFilteringEnabled() && isAdRequest(requestUrl))))
                     return emptyBlockedResponse();'''
-    toggle_with_log = '''                boolean blocked = isAdFilteringEnabled() && request != null &&
-                    isAdRequest(request.getUrl().toString()) && !isRuFilmMediaRequest(request.getUrl().toString());
+    toggle_with_log = '''                String requestUrl = request == null ? null : request.getUrl().toString();
+                boolean blocked = requestUrl != null && !isRuFilmMediaRequest(requestUrl) &&
+                    (isKnownAdRequest(requestUrl) || (isAdFilteringEnabled() && isAdRequest(requestUrl)));
                 logVkRequest(request, blocked);
                 if (blocked) return emptyBlockedResponse();'''
     replace_once(toggle_filter, toggle_with_log, "ad-filter toggle request diagnostics")
 
 old_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
-                if (isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url))
+                if (!isRuFilmMediaRequest(url) &&
+                        (isKnownAdRequest(url) || (isAdFilteringEnabled() && isAdRequest(url))))
                     return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, url);
             }'''
 new_legacy = '''            @SuppressWarnings("deprecation")
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url){
-                boolean blocked = isAdFilteringEnabled() && isAdRequest(url) && !isRuFilmMediaRequest(url);
+                boolean blocked = !isRuFilmMediaRequest(url) &&
+                    (isKnownAdRequest(url) || (isAdFilteringEnabled() && isAdRequest(url)));
                 logVkUrl(url, "GET", blocked, "legacy-api");
                 if (blocked) return emptyBlockedResponse();
                 return super.shouldInterceptRequest(view, url);
