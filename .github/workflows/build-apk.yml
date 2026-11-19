@@ -119,10 +119,8 @@ jobs:
           grep -F 'w.__rufilmActiveVideo=v' patches/patch_player.py
           grep -F "v.addEventListener('seeked',finishSeek" patches/patch_player.py
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
-          if grep -F 'boolean blocked = request != null && isAdRequest' "$SRC"; then
-            echo "::error::Found an unconditional diagnostic ad-blocking path."
-            exit 1
-          fi
+          grep -F 'isAdFilteringEnabled() && (isKnownAdRequest(requestUrl) || isAdRequest(requestUrl))' "$SRC"
+          grep -F 'isAdFilteringEnabled() && (isKnownAdRequest(url) || isAdRequest(url))' "$SRC"
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
       - name: Upload patched source for inspection
         uses: actions/upload-artifact@v4
