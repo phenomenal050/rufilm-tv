@@ -6,10 +6,10 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.0.15-beta.18"
+        default: "v3.1.0"
         type: string
   push:
-    branches: [fix/updater-channel-and-ad-filter-toggle, fix/vk-first-tap-layout-ad-target]
+    branches: [main]
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
@@ -27,10 +27,10 @@ jobs:
 
       - name: Validate and load persistent signing key
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_B64: \${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$KEYSTORE_B64" || { echo "::error::Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
@@ -48,7 +48,7 @@ jobs:
 
       - name: Resolve and validate release version
         env:
-          INPUT_TAG: ${{ inputs.release_tag }}
+          INPUT_TAG: \${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
@@ -59,19 +59,23 @@ jobs:
           else
             TAG="v$VERSION_NAME"
           fi
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]] || { echo "::error::Beta tag must look like v3.0.15-beta.5"; exit 1; }
-          TAG_VERSION="${TAG#v}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] || { echo "::error::Release tag must look like v3.1.0 or v3.1.0-beta.1"; exit 1; }
+          TAG_VERSION="\${TAG#v}"
           test "$TAG_VERSION" = "$VERSION_NAME" || {
             echo "::error::Tag $TAG does not match Gradle versionName $VERSION_NAME"; exit 1;
           }
-          echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
+          if [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+            echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "RELEASE_APK_NAME=RuFilmTV-$VERSION_NAME.apk" >> "$GITHUB_ENV"
           echo "Publishing $TAG (versionCode $VERSION_CODE)."
           echo "Source commit: $GITHUB_SHA"
-      
+
       - name: Extract RuFilmTV project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
 
@@ -118,17 +122,26 @@ jobs:
 
       - name: Publish GitHub Release with APK and checksum
         env:
-          GH_TOKEN: ${{ secrets.RUFILMTV_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: \${{ secrets.RUFILMTV_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           if ! gh auth status >/dev/null 2>&1; then
             echo "::error::GitHub release token is unavailable."
             exit 1
           fi
+          RELEASE_ARGS=()
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            RELEASE_ARGS+=(--prerelease)
+            RELEASE_TITLE="RuFilmTV $RELEASE_VERSION — публичная тестовая сборка VK"
+            RELEASE_NOTES="Публичная тестовая сборка RuFilmTV. Предварительный канал; после проверки будет опубликована стабильная версия."
+          else
+            RELEASE_TITLE="RuFilmTV 3.1"
+            RELEASE_NOTES="Основной публичный стабильный релиз RuFilmTV 3.1. Сохранён оригинальный встроенный VK Video player, обновлятор и рекламная фильтрация. Релиз подписан постоянным ключом RuFilmTV."
+          fi
           gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
             "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
-            --title "RuFilmTV $RELEASE_TAG — публичная тестовая сборка VK" \
-            --notes "Публичная тестовая сборка RuFilmTV для пользователей, которые добровольно выбрали тестовый канал в обновляторе. Включена диагностика встроенного VK-плеера: запросы, блокировки, ошибки загрузки, HTTP, SSL и JavaScript. Cookies и токены в диагностические записи не включаются. Рекламная фильтрация сохранена. Это предварительная версия; после проверки будет опубликована стабильная сборка." \
-            --prerelease \
-            --target "$GITHUB_SHA"
+            --title "$RELEASE_TITLE" \
+            --notes "$RELEASE_NOTES" \
+            --target "$GITHUB_SHA" \
+            "\${RELEASE_ARGS[@]}"
