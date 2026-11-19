@@ -1111,7 +1111,7 @@ if "MainActivity.this.installPremiumTopNavigation();" not in s:
 # Apply after every other transformation so later insertions cannot undo these guards.
 import re as _final_re
 _apply = '''    private void applyCleanMode(){
-        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+);})();",null);
+        if(web!=null) web.evaluateJavascript("(function(){var d=document.documentElement;if(!d)return;d.classList.toggle('rf-clean',"+cleanMode+");d.classList.toggle('rf-no-adfilter',"+(!isAdFilteringEnabled())+");d.classList.toggle('rf-adfilter-enabled',"+isAdFilteringEnabled()+");})();",null);
         if(cleanButton!=null){
             cleanButton.setText(cleanMode?"Чистый ✓":"Чистый");
             cleanButton.setBackground(shape(cleanMode?0xffb9273d:panel,13));
