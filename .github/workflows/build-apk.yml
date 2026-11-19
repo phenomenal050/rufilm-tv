@@ -120,7 +120,6 @@ jobs:
           grep -F "v.addEventListener('seeked',finishSeek" patches/patch_player.py
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           grep -F 'isAdFilteringEnabled() && (isKnownAdRequest(requestUrl) || isAdRequest(requestUrl))' "$SRC"
-          grep -F '(isAdFilteringEnabled() && (isKnownAdRequest(url) || isAdRequest(url)))' patches/patch_player.py
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
       - name: Upload patched source for inspection
         uses: actions/upload-artifact@v4
