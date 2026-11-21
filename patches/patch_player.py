@@ -453,6 +453,21 @@ if 'rufilmActiveInstance = this;' not in s:
         raise SystemExit('Could not find onCreate for activity reference')
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
 
+# Apply a fixed 250 ms audio lead on Amlogic/Android TV audio HALs.
+# Negative offset advances audio relative to the picture; unsupported HALs ignore it.
+if 'audio_delay=-250' not in s:
+    s = s.replace('        rufilmActiveInstance = this;\n', '''        rufilmActiveInstance = this;
+        try {
+            android.media.AudioManager audio = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+            if (audio != null) {
+                audio.setParameters("audio_delay=-250");
+                android.util.Log.i("RuFilmTV", "Requested fixed A/V correction: audio lead 250 ms");
+            }
+        } catch (Exception e) {
+            android.util.Log.w("RuFilmTV", "Audio delay parameter is not supported", e);
+        }
+''', 1)
+
 # Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
