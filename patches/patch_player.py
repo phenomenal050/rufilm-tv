@@ -456,7 +456,7 @@ if 'rufilmActiveInstance = this;' not in s:
 # Apply the user's persisted A/V offset through the Android TV audio HAL.
 # This is a vendor-specific request; the in-app calibration menu lets the user test support.
 if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
-    s = s.replace('        rufilmActiveInstance = this;\\n', '''        rufilmActiveInstance = this;
+    s = s.replace('        rufilmActiveInstance = this;\n', '''        rufilmActiveInstance = this;
         applyAudioSyncOffset(getAudioSyncOffsetMs());
 ''', 1)
 
