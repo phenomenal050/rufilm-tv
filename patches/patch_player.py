@@ -816,8 +816,8 @@ s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,
     private final int[] themeColors = {0xffd73445,0xff9b6bdb,0xff3978e8,0xff20a6d8,0xff16a6a0,0xff35a866,0xff91b832,0xffe88732,0xffdc669e,0xffc49a42};''')
 s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
 s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
-s = s.replace('playerMode = "original"; // Native Media3 handoff intentionally disabled; keep the site original player.',
-'''playerMode = "original"; // Keep the website's original player; Media3 handoff is disabled.
+s = s.replace('playerMode = prefs.getString("player_mode", "native");',
+'''playerMode = prefs.getString("player_mode", "native");
         selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
         accent = themeColors[selectedTheme];''')
 s = s.replace('''        playerButton=button("Плеер",false);playerButton.setTextSize(9);''', '''        themeButton=button("Цвет",false);themeButton.setTextSize(9);
@@ -921,7 +921,13 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3."""
+                // Hand off only after VK has supplied a fresh playable manifest.
+                // The native player captures the exact active video position before hiding the original.
+                if ("native".equals(playerMode) && launchCapturedMedia()) {
+                    android.util.Log.i("RuFilmTV", "VK fullscreen intercepted by native player");
+                    callback.onCustomViewHidden();
+                    return;
+                }"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
