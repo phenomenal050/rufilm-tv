@@ -453,19 +453,11 @@ if 'rufilmActiveInstance = this;' not in s:
         raise SystemExit('Could not find onCreate for activity reference')
     s = s[:on_create.end()] + '\n        rufilmActiveInstance = this;' + s[on_create.end():]
 
-# Apply a fixed 250 ms audio lead on Amlogic/Android TV audio HALs.
-# Negative offset advances audio relative to the picture; unsupported HALs ignore it.
-if 'audio_delay=-250' not in s:
-    s = s.replace('        rufilmActiveInstance = this;\n', '''        rufilmActiveInstance = this;
-        try {
-            android.media.AudioManager audio = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
-            if (audio != null) {
-                audio.setParameters("audio_delay=-250");
-                android.util.Log.i("RuFilmTV", "Requested fixed A/V correction: audio lead 250 ms");
-            }
-        } catch (Exception e) {
-            android.util.Log.w("RuFilmTV", "Audio delay parameter is not supported", e);
-        }
+# Apply the user's persisted A/V offset through the Android TV audio HAL.
+# This is a vendor-specific request; the in-app calibration menu lets the user test support.
+if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
+    s = s.replace('        rufilmActiveInstance = this;\\n', '''        rufilmActiveInstance = this;
+        applyAudioSyncOffset(getAudioSyncOffsetMs());
 ''', 1)
 
 # Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
@@ -1077,21 +1069,60 @@ once('        Button search=button("⌕",true);',
      '        moreButton=button("Ещё",false); moreButton.setTextSize(10);\n        moreButton.setOnClickListener(v->showAppMenu());\n        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(58),dp(42));mp.leftMargin=dp(5);header.addView(moreButton,mp);\n        refreshButton=button("↻",false); refreshButton.setTextSize(21);\n        refreshButton.setContentDescription("Обновить страницу");\n        refreshButton.setOnClickListener(v->{ if(web!=null){ web.reload(); web.requestFocus(); } });\n        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(42),dp(42));rp.leftMargin=dp(5);header.addView(refreshButton,rp);\n        Button search=button("⌕",true);',
      "app menu and refresh button")
 once("    private void showPlayerDialog() {",
-     '''    private void showAppMenu() {
+     '''    private int getAudioSyncOffsetMs() {
+        return getSharedPreferences("rufilm_audio_sync", MODE_PRIVATE).getInt("offset_ms", -250);
+    }
+
+    private void applyAudioSyncOffset(int offsetMs) {
+        try {
+            android.media.AudioManager audio = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+            if (audio == null) {
+                android.util.Log.w("RuFilmTV", "A/V sync offset not applied: AudioManager unavailable");
+                return;
+            }
+            audio.setParameters("audio_delay=" + offsetMs);
+            android.util.Log.i("RuFilmTV", "A/V sync HAL request: audio_delay=" + offsetMs
+                    + " ms; device=" + android.os.Build.MANUFACTURER + "/" + android.os.Build.MODEL);
+        } catch (Exception e) {
+            android.util.Log.w("RuFilmTV", "A/V sync HAL request failed for " + offsetMs + " ms", e);
+        }
+    }
+
+    private void showAudioSyncDialog() {
+        final int[] offsets = {0, -100, -150, -200, -250, -300, -400, -500};
+        String[] labels = {"0 мс — без коррекции", "100 мс", "150 мс", "200 мс",
+                "250 мс", "300 мс", "400 мс", "500 мс"};
+        int current = getAudioSyncOffsetMs();
+        int selected = 0;
+        for (int i = 0; i < offsets.length; i++) if (offsets[i] == current) selected = i;
+        new AlertDialog.Builder(this).setTitle("Синхронизация звука")
+            .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                int value = offsets[which];
+                getSharedPreferences("rufilm_audio_sync", MODE_PRIVATE).edit()
+                    .putInt("offset_ms", value).apply();
+                applyAudioSyncOffset(value);
+                Toast.makeText(this, value == 0 ? "Коррекция отключена" :
+                    "Запрошено опережение звука на " + (-value) + " мс", Toast.LENGTH_LONG).show();
+                dialog.dismiss();
+            }).setNegativeButton("Закрыть", null).show();
+    }
+
+    private void showAppMenu() {
         String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
-                "Проверить обновления", "Обновить списки рекламы"};
+                "Синхронизация звука", "Проверить обновления", "Обновить списки рекламы"};
         new AlertDialog.Builder(this).setTitle("Ещё").setItems(items, (dialog, which) -> {
             if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
             else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
             else if (which == 2) showAdFilterDialog();
             else if (which == 3) showPlayerDialog();
-            else if (which == 4) AppUpdateManager.check(MainActivity.this);
-            else if (which == 5) updateFilterLists();
+            else if (which == 4) showAudioSyncDialog();
+            else if (which == 5) AppUpdateManager.check(MainActivity.this);
+            else if (which == 6) updateFilterLists();
         }).show();
     }
 
     private void showPlayerDialog() {''',
-     "GitHub updater menu")
+     "GitHub updater menu and audio sync calibration")
 s = s.replace("showPlayerDialog(); return true;", "showAppMenu(); return true;")
 once("    @Override protected void onSaveInstanceState(Bundle out){",
      '''    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
