@@ -603,7 +603,7 @@ resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\n        if (nativePlayerLaunching && customView != null) hideCustomView();\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());' + s[body_end:]
+        s = s[:body_end] + '\n        boolean returningFromNativePlayer = nativePlayerLaunching;\n        if (web != null) web.onResume();\n        if (returningFromNativePlayer && customView != null) hideCustomView();\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());\n        if (returningFromNativePlayer && web != null) {\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 350L);\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 1100L);\n        }' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
@@ -621,8 +621,10 @@ else:
 pause = re.search(r'((?:public|protected)\s+void\s+onPause\s*\(\s*\)\s*\{)', s)
 if pause:
     body_end = pause.end()
-    if 'applyAudioSyncOffset(0);' not in s[body_end:body_end + 240]:
+    if 'applyAudioSyncOffset(0);' not in s[body_end:body_end + 300]:
         s = s[:body_end] + '\n        applyAudioSyncOffset(0);' + s[body_end:]
+    if 'if (nativePlayerLaunching && web != null) web.onPause();' not in s[body_end:body_end + 500]:
+        s = s[:body_end] + '\n        if (nativePlayerLaunching && web != null) web.onPause();' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
