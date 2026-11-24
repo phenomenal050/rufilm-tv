@@ -205,8 +205,17 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (!(lower.contains(".m3u8") || lower.contains(".mpd") || lower.contains(".mp4") ||
                 lower.contains(".m4v") || lower.contains(".webm"))) return;
         if (isAdRequest(rawUrl) && !isRuFilmMediaRequest(rawUrl)) return;
+        // JS/WebSocket discovery is useful for finding a URL, but the actual
+        // WebView request is authoritative for authentication headers. Never let
+        // a later JS candidate erase Origin/Authorization/Cookie captured from
+        // shouldInterceptRequest for the same media URL.
         HashMap<String, String> headers = new HashMap<>();
         if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);
+        try {
+            Uri ref = Uri.parse(referer);
+            if (ref.getScheme() != null && ref.getAuthority() != null)
+                headers.put("Origin", ref.getScheme() + "://" + ref.getAuthority());
+        } catch (Exception ignored) { }
         if (userAgent != null && !userAgent.isEmpty()) headers.put("User-Agent", userAgent);
         try {
             String cookie = android.webkit.CookieManager.getInstance().getCookie(rawUrl);
@@ -215,13 +224,32 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         int priority = (lower.contains(".m3u8") || lower.contains(".mpd")) ? 3 : 1;
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
-            if (capturedMediaUrl == null || now - capturedMediaAt > 15000L || priority >= capturedMediaPriority) {
+            boolean sameUrl = rawUrl.equals(capturedMediaUrl);
+            boolean stale = capturedMediaUrl == null || now - capturedMediaAt > 15000L;
+            if (sameUrl) {
+                // Keep all real request headers already collected; fill only gaps.
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    boolean exists = false;
+                    for (String key : capturedMediaHeaders.keySet()) {
+                        if (key.equalsIgnoreCase(entry.getKey())) { exists = true; break; }
+                    }
+                    if (!exists) capturedMediaHeaders.put(entry.getKey(), entry.getValue());
+                }
+                if ((capturedMediaReferer == null || capturedMediaReferer.isEmpty()) &&
+                        referer != null) capturedMediaReferer = referer;
+                if ((capturedMediaUserAgent == null || capturedMediaUserAgent.isEmpty()) &&
+                        userAgent != null) capturedMediaUserAgent = userAgent;
+                capturedMediaAt = now;
+            } else if (stale || priority > capturedMediaPriority) {
                 capturedMediaUrl = rawUrl;
                 capturedMediaReferer = referer == null || referer.isEmpty() ? BASE + "/" : referer;
                 capturedMediaUserAgent = userAgent;
                 capturedMediaHeaders = headers;
                 capturedMediaAt = now;
                 capturedMediaPriority = priority;
+            } else {
+                android.util.Log.i("RuFilmTV", "Ignored secondary JS media candidate host=" +
+                    Uri.parse(rawUrl).getHost() + " priority=" + priority);
             }
         }
         maybeOfferMxPlayer(0L);
