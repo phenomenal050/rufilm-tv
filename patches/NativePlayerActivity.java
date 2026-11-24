@@ -425,7 +425,7 @@ public class NativePlayerActivity extends Activity {
                 }
             } catch (Exception ignored) { }
             if (attempt < 24) {
-                syncHandler.postDelayed(() -> refreshEpisodeSelectorsWithRetry(which, attempt + 1), 450L);
+                syncHandler.postDelayed(() -> refreshEpisodeSelectorsWithRetry(which, attempt + 1), 1000L);
             } else {
                 Toast.makeText(this, "Сайт не передал список сезонов/серий. Убедитесь, что плеер загрузился.", Toast.LENGTH_LONG).show();
             }
@@ -444,7 +444,7 @@ public class NativePlayerActivity extends Activity {
                     return;
                 }
             } catch (Exception ignored) { }
-            if (attempt < 12) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(attempt + 1), 500L);
+            if (attempt < 12) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(attempt + 1), 1000L);
         }));
     }
 
