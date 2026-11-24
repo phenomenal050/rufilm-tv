@@ -308,6 +308,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     }
 
     private void showExternalPlayerChooser(long positionMs) {
+        final boolean hasCapturedMedia;
+        synchronized (mediaCaptureLock) {
+            hasCapturedMedia = capturedMediaUrl != null &&
+                    System.currentTimeMillis() - capturedMediaAt <= 90000L;
+        }
         runOnUiThread(() -> {
             java.util.ArrayList<PlayerChoice> choices = getAvailablePlayerChoices();
             String saved = getSharedPreferences("rufilm_players", MODE_PRIVATE)
@@ -359,13 +364,20 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                         else editor.remove("default_player_id");
                         editor.apply();
                         dialog.dismiss();
-                        launchSelectedPlayer(id, positionMs);
+                        if (hasCapturedMedia) launchSelectedPlayer(id, positionMs);
+                        else Toast.makeText(this, remember.isChecked()
+                                ? "Плеер по умолчанию сохранён."
+                                : "Выбор плеера сохранён только для текущего запуска.", Toast.LENGTH_LONG).show();
                     }));
             dialog.show();
         });
     }
 
     private void launchSelectedPlayer(String playerId, long positionMs) {
+        if ("original".equals(playerId)) {
+            syncOriginalPlayback(0L, false);
+            return;
+        }
         final String url;
         final HashMap<String, String> headers;
         synchronized (mediaCaptureLock) {
@@ -375,10 +387,6 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             }
             url = capturedMediaUrl;
             headers = new HashMap<>(capturedMediaHeaders);
-        }
-        if ("original".equals(playerId)) {
-            syncOriginalPlayback(0L, false);
-            return;
         }
         if ("media3".equals(playerId)) {
             playerMode = "native";
