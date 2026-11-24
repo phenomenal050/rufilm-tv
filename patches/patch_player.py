@@ -368,9 +368,11 @@ episode_support = r'''
             "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
-            "function installMxOffer(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
-            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;setTimeout(function(){if(v.paused)return;try{if(window.RuFilmPlayer&&window.RuFilmPlayer.offerMxPlayer)window.RuFilmPlayer.offerMxPlayer(Math.round((v.currentTime||0)*1000));}catch(e){}},1200);},true);" +
-            "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});}" +
+            "function installMxOffer(){var docs=[];function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
+            "function bindDoc(d){try{var w=d.defaultView||window;[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;setTimeout(function(){if(v.paused)return;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b&&b.offerMxPlayer)b.offerMxPlayer(Math.round((v.currentTime||0)*1000));}catch(e){}},1200);},true);" +
+            "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
+            "collect(window,0);docs.forEach(bindDoc);}" +
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
             "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
             "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
@@ -382,7 +384,7 @@ episode_support = r'''
             "['loadedmetadata','play','pause','timeupdate','durationchange','emptied'].forEach(function(e){v.addEventListener(e,place);});" +
             "window.addEventListener('resize',place);window.addEventListener('scroll',place,true);place();v.__rufilmFsPlace=place;});}" +
             "installMxOffer();installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
-            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installFullscreenButton();mark();},350);});" +
+            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installMxOffer();installFullscreenButton();mark();},350);});" +
             "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(script, null);
