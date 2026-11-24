@@ -92,6 +92,11 @@ jobs:
           grep -F 'replace(/\\s+/g' patches/patch_mx_crossframe.py
           grep -F 'window.__rufilmFrameObserver' patches/patch_player.py
           grep -F 'function stopOriginal()' patches/patch_mx_crossframe.py
+          grep -F 'document.addEventListener(\'visibilitychange\'' patches/patch_mx_crossframe.py
+          grep -F 'framePath:next' patches/patch_player.py
+          grep -F 'x.framePath=fp' patches/patch_mx_crossframe.py
+          grep -F 'applyEpisodeSelection(framePathJson' patches/NativePlayerActivity.java
+          grep -F 'window.__rufilmOriginalSuspended=true' patches/patch_player.py
           grep -F 'function playerNode(e)' patches/patch_player.py
           grep -F 'restore();return;' patches/patch_player.py
           grep -F 'playerMode = "original"' patches/patch_player.py
