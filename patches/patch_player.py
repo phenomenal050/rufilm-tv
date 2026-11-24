@@ -456,8 +456,7 @@ s = s.replace('''            @SuppressWarnings("deprecation")
             }''', 1)
 s = s.replace('filterButton.setOnClickListener(v->updateFilterLists());',
               'filterButton.setOnClickListener(v->showAdFilterDialog());', 1)
-s = s.replace('String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
-              'String[] items = {"Чистый", "Цвет", "Фильтры рекламы",', 1)
+s = s.replace('String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",', 'String[] items = {"Чистый", "Цвет", "Фильтры рекламы",', 1)
 s = s.replace('''    private void applyCleanMode(){
         if(web!=null) web.evaluateJavascript("document.documentElement.classList.toggle('rf-clean',"+cleanMode+");",null);
     }''', '''    private void applyCleanMode(){
