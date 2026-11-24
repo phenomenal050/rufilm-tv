@@ -603,7 +603,7 @@ resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());' + s[body_end:]
+        s = s[:body_end] + '\n        if (nativePlayerLaunching && customView != null) hideCustomView();\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
