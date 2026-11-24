@@ -255,45 +255,117 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         maybeOfferMxPlayer(0L);
     }
 
-    private void offerMxPlayer(long positionMs) {
-        synchronized (mediaCaptureLock) {
-            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this,
-                    "Не удалось получить прямую ссылку для MX Player. Продолжайте в оригинальном плеере.",
-                    Toast.LENGTH_LONG).show());
-                return;
-            }
+    private static class PlayerChoice {
+        final String id, label, packageName;
+        PlayerChoice(String id, String label, String packageName) {
+            this.id = id; this.label = label; this.packageName = packageName;
         }
+    }
+
+    private boolean playerPackageInstalled(String packageName) {
+        try { getPackageManager().getPackageInfo(packageName, 0); return true; }
+        catch (Exception ignored) { return false; }
+    }
+
+    private java.util.ArrayList<PlayerChoice> getAvailablePlayerChoices() {
+        java.util.ArrayList<PlayerChoice> choices = new java.util.ArrayList<>();
+        choices.add(new PlayerChoice("original", "Оригинальный плеер сайта", null));
+        choices.add(new PlayerChoice("media3", "Встроенный Media3", null));
+        if (playerPackageInstalled("is.xyz.mpv"))
+            choices.add(new PlayerChoice("mpv", "mpv-android", "is.xyz.mpv"));
+        if (playerPackageInstalled("org.videolan.vlc"))
+            choices.add(new PlayerChoice("vlc", "VLC", "org.videolan.vlc"));
+        if (playerPackageInstalled("net.gtvbox.videoplayer"))
+            choices.add(new PlayerChoice("vimu", "Vimu Player", "net.gtvbox.videoplayer"));
+        if (playerPackageInstalled("net.gtvbox.vimuhd"))
+            choices.add(new PlayerChoice("vimu_free", "Vimu Player (бесплатный)", "net.gtvbox.vimuhd"));
+        if (playerPackageInstalled("com.brouken.player"))
+            choices.add(new PlayerChoice("just", "Just Player", "com.brouken.player"));
+        if (playerPackageInstalled("com.mxtech.videoplayer.ad"))
+            choices.add(new PlayerChoice("mx_ad", "MX Player", "com.mxtech.videoplayer.ad"));
+        if (playerPackageInstalled("com.mxtech.videoplayer.pro"))
+            choices.add(new PlayerChoice("mx_pro", "MX Player Pro", "com.mxtech.videoplayer.pro"));
+        if (playerPackageInstalled("org.xbmc.kodi"))
+            choices.add(new PlayerChoice("kodi", "Kodi", "org.xbmc.kodi"));
+        return choices;
+    }
+
+    private boolean isPlayerChoiceAvailable(String id) {
+        if ("original".equals(id) || "media3".equals(id)) return true;
+        for (PlayerChoice choice : getAvailablePlayerChoices()) if (choice.id.equals(id)) return true;
+        return false;
+    }
+
+    // A saved choice is launched directly; without it the viewer gets a player picker.
+    private void offerMxPlayer(long positionMs) {
+        String defaultId = getSharedPreferences("rufilm_players", MODE_PRIVATE)
+                .getString("default_player_id", "");
+        if (defaultId != null && !defaultId.isEmpty() && isPlayerChoiceAvailable(defaultId)) {
+            launchSelectedPlayer(defaultId, positionMs);
+            return;
+        }
+        showExternalPlayerChooser(positionMs);
+    }
+
+    private void showExternalPlayerChooser(long positionMs) {
         runOnUiThread(() -> {
-            boolean free = isMxPackageInstalled("com.mxtech.videoplayer.ad");
-            boolean pro = isMxPackageInstalled("com.mxtech.videoplayer.pro");
-            if (!free && !pro) {
-                Toast.makeText(MainActivity.this,
-                    "MX Player не установлен. Оригинальный плеер продолжает работу.",
-                    Toast.LENGTH_LONG).show();
-                return;
+            java.util.ArrayList<PlayerChoice> choices = getAvailablePlayerChoices();
+            String saved = getSharedPreferences("rufilm_players", MODE_PRIVATE)
+                    .getString("default_player_id", "");
+            android.widget.LinearLayout content = new android.widget.LinearLayout(this);
+            content.setOrientation(android.widget.LinearLayout.VERTICAL);
+            int pad = (int)(18 * getResources().getDisplayMetrics().density);
+            content.setPadding(pad, pad / 2, pad, pad / 2);
+            android.widget.RadioGroup group = new android.widget.RadioGroup(this);
+            group.setOrientation(android.widget.RadioGroup.VERTICAL);
+            int selectedId = -1;
+            for (int i = 0; i < choices.size(); i++) {
+                PlayerChoice choice = choices.get(i);
+                android.widget.RadioButton radio = new android.widget.RadioButton(this);
+                radio.setId(1000 + i);
+                radio.setTag(choice.id);
+                radio.setText(choice.label);
+                radio.setTextSize(16);
+                radio.setMinHeight((int)(48 * getResources().getDisplayMetrics().density));
+                group.addView(radio);
+                if (choice.id.equals(saved)) selectedId = radio.getId();
+                if (selectedId < 0 && "original".equals(choice.id)) selectedId = radio.getId();
             }
-            new AlertDialog.Builder(MainActivity.this)
-                .setTitle("Где воспроизводить видео?")
-                .setMessage("Можно открыть текущий поток во внешнем MX Player.")
-                .setPositiveButton("Открыть в MX Player", (dialog, which) -> {
-                    if (free && pro) {
-                        new AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Выберите MX Player")
-                            .setItems(new String[]{"MX Player (бесплатный)", "MX Player Pro"}, (d, choice) ->
-                                launchMxPlayer(choice == 0 ? "com.mxtech.videoplayer.ad" : "com.mxtech.videoplayer.pro", positionMs))
-                            .setNegativeButton("Отмена", null)
-                            .show();
-                    } else {
-                        launchMxPlayer(free ? "com.mxtech.videoplayer.ad" : "com.mxtech.videoplayer.pro", positionMs);
-                    }
-                })
-                .setNegativeButton("Продолжить здесь", null)
-                .show();
+            if (selectedId >= 0) group.check(selectedId);
+            content.addView(group);
+            android.widget.CheckBox remember = new android.widget.CheckBox(this);
+            remember.setText("Использовать выбранный плеер по умолчанию");
+            remember.setTextSize(14);
+            remember.setChecked(saved != null && !saved.isEmpty());
+            content.addView(remember);
+            android.app.AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle("Выберите видеоплеер")
+                    .setView(content)
+                    .setPositiveButton("Продолжить", null)
+                    .setNegativeButton("Отмена", null)
+                    .create();
+            dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setOnClickListener(v -> {
+                        int checked = group.getCheckedRadioButtonId();
+                        android.widget.RadioButton radio = checked < 0 ? null : group.findViewById(checked);
+                        if (radio == null || !(radio.getTag() instanceof String)) {
+                            Toast.makeText(this, "Выберите плеер", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        String id = (String)radio.getTag();
+                        android.content.SharedPreferences.Editor editor =
+                                getSharedPreferences("rufilm_players", MODE_PRIVATE).edit();
+                        if (remember.isChecked()) editor.putString("default_player_id", id);
+                        else editor.remove("default_player_id");
+                        editor.apply();
+                        dialog.dismiss();
+                        launchSelectedPlayer(id, positionMs);
+                    }));
+            dialog.show();
         });
     }
 
-    private void launchMxPlayer(String packageName, long positionMs) {
+    private void launchSelectedPlayer(String playerId, long positionMs) {
         final String url;
         final HashMap<String, String> headers;
         synchronized (mediaCaptureLock) {
@@ -304,35 +376,49 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             url = capturedMediaUrl;
             headers = new HashMap<>(capturedMediaHeaders);
         }
+        if ("original".equals(playerId)) {
+            syncOriginalPlayback(0L, false);
+            return;
+        }
+        if ("media3".equals(playerId)) {
+            playerMode = "native";
+            boolean launched = launchCapturedMedia();
+            playerMode = "original";
+            if (!launched) Toast.makeText(this, "Media3 пока не удалось запустить. Продолжайте в оригинальном плеере.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        PlayerChoice selected = null;
+        for (PlayerChoice choice : getAvailablePlayerChoices())
+            if (choice.id.equals(playerId)) { selected = choice; break; }
+        if (selected == null || selected.packageName == null) {
+            Toast.makeText(this, "Выбранный плеер не установлен.", Toast.LENGTH_LONG).show();
+            showExternalPlayerChooser(positionMs);
+            return;
+        }
         try {
-            String activityName = "com.mxtech.videoplayer.ad".equals(packageName)
-                ? "com.mxtech.videoplayer.ad.ActivityScreen"
-                : "com.mxtech.videoplayer.ActivityScreen";
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-            intent.setClassName(packageName, activityName);
-            String lower = url.toLowerCase(java.util.Locale.ROOT);
+            String proxyUrl = LocalStreamProxy.start(url, headers);
+            String lower = url.toLowerCase(Locale.ROOT);
             String mime = lower.contains(".m3u8") ? "application/x-mpegURL" :
-                (lower.contains(".mpd") ? "application/dash+xml" : "video/*");
-            intent.setDataAndType(android.net.Uri.parse(url), mime);
+                    (lower.contains(".mpd") ? "application/dash+xml" : "video/*");
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            if ("mx_ad".equals(playerId))
+                intent.setClassName(selected.packageName, "com.mxtech.videoplayer.ad.ActivityScreen");
+            else if ("mx_pro".equals(playerId))
+                intent.setClassName(selected.packageName, "com.mxtech.videoplayer.ActivityScreen");
+            else
+                intent.setPackage(selected.packageName);
+            intent.setDataAndType(Uri.parse(proxyUrl), mime);
             intent.putExtra("title", "RuFilmTV");
-            intent.putExtra("secure_uri", true);
-            intent.putExtra("return_result", true);
-            intent.putExtra("sticky", false);
             intent.putExtra("position", (int)Math.max(0L, Math.min(2147483647L, positionMs)));
-            String[] mxHeaders = new String[headers.size() * 2];
-            int index = 0;
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                mxHeaders[index++] = entry.getKey();
-                mxHeaders[index++] = entry.getValue();
-            }
-            if (mxHeaders.length > 0) intent.putExtra("headers", mxHeaders);
-            if (web != null) {
-                web.evaluateJavascript("(function(){try{document.querySelectorAll('video').forEach(function(v){v.pause();});}catch(e){}})();", null);
-            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (web != null) web.evaluateJavascript(
+                    "(function(){try{document.querySelectorAll('video').forEach(function(v){v.pause();});}catch(e){}})();", null);
             startActivity(intent);
         } catch (Exception e) {
-            android.util.Log.e("RuFilmTV", "Cannot launch MX Player", e);
-            Toast.makeText(this, "Не удалось открыть MX Player. Оригинальный плеер доступен по кнопке Play.", Toast.LENGTH_LONG).show();
+            android.util.Log.e("RuFilmTV", "Cannot launch external player through local bridge", e);
+            Toast.makeText(this, "Не удалось запустить плеер через локальный мост: " +
+                    (e.getMessage() == null ? "ошибка запуска" : e.getMessage()), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1327,7 +1413,7 @@ once("    private void showPlayerDialog() {",
             if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
             else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
             else if (which == 2) showAdFilterDialog();
-            else if (which == 3) showPlayerDialog();
+            else if (which == 3) showExternalPlayerChooser(0L);
             else if (which == 4) showAudioSyncDialog();
             else if (which == 5) AppUpdateManager.check(MainActivity.this);
             else if (which == 6) updateFilterLists();
@@ -1404,6 +1490,12 @@ if "setMediaPlaybackRequiresUserGesture(true)" in s:
     s = s.replace("setMediaPlaybackRequiresUserGesture(true)", "setMediaPlaybackRequiresUserGesture(false)", 1)
 elif "setMediaPlaybackRequiresUserGesture(false)" not in s:
     raise SystemExit("Could not locate WebView media gesture setting")
+
+# Copy the loopback proxy helper next to MainActivity so Android compiles it in-package.
+proxy_source = pathlib.Path(__file__).with_name("LocalStreamProxy.java")
+if not proxy_source.exists():
+    raise SystemExit("LocalStreamProxy.java is missing from patches/")
+(p.parent / "LocalStreamProxy.java").write_text(proxy_source.read_text(encoding="utf-8"), encoding="utf-8")
 
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
