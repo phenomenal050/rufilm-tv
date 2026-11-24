@@ -202,6 +202,28 @@ public class NativePlayerActivity extends Activity {
         title.setTextSize(16);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        seasonButton = new Button(this);
+        seasonButton.setText("Сезон");
+        seasonButton.setTextSize(12);
+        seasonButton.setTextColor(android.graphics.Color.WHITE);
+        seasonButton.setAllCaps(false);
+        seasonButton.setMinWidth(0);
+        seasonButton.setPadding(dp(6), 0, dp(6), 0);
+        seasonButton.setBackgroundColor(0x66333333);
+        seasonButton.setOnClickListener(v -> showEpisodeSelector(0));
+        top.addView(seasonButton, new android.widget.LinearLayout.LayoutParams(dp(88), dp(42)));
+        episodeButton = new Button(this);
+        episodeButton.setText("Серия");
+        episodeButton.setTextSize(12);
+        episodeButton.setTextColor(android.graphics.Color.WHITE);
+        episodeButton.setAllCaps(false);
+        episodeButton.setMinWidth(0);
+        episodeButton.setPadding(dp(6), 0, dp(6), 0);
+        episodeButton.setBackgroundColor(0x66333333);
+        episodeButton.setOnClickListener(v -> showEpisodeSelector(1));
+        android.widget.LinearLayout.LayoutParams episodeParams = new android.widget.LinearLayout.LayoutParams(dp(88), dp(42));
+        episodeParams.leftMargin = dp(5);
+        top.addView(episodeButton, episodeParams);
         android.widget.TextView exitFullscreen = controlText("Выход", 14);
         exitFullscreen.setContentDescription("Выйти из полноэкранного режима");
         top.addView(exitFullscreen, new android.widget.LinearLayout.LayoutParams(dp(76), dp(46)));
@@ -297,9 +319,7 @@ public class NativePlayerActivity extends Activity {
             if (controlsVisible) hideAssistantControls(); else showAssistantControls();
         });
 
-        // Keep the season/episode and quality actions available from the top-right menu.
-        seasonButton = new Button(this);
-        episodeButton = new Button(this);
+        // Season and episode buttons are visible in the top bar; quality remains in the menu.
         qualityButton = new Button(this);
         try {
             String selectors = getIntent().getStringExtra(EXTRA_EPISODE_SELECTORS);
@@ -369,7 +389,7 @@ public class NativePlayerActivity extends Activity {
 
     private void updateEpisodeButtonLabels() {
         try {
-            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(false); episodeButton.setEnabled(false); return; }
+            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(true); episodeButton.setEnabled(true); return; }
             org.json.JSONObject season = episodeSelectors.getJSONObject(0);
             org.json.JSONObject episode = episodeSelectors.getJSONObject(1);
             seasonButton.setText("Сезон: " + season.optString("selectedText", "—") + " ▾");
