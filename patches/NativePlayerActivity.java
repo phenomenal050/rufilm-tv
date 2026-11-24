@@ -471,7 +471,8 @@ public class NativePlayerActivity extends Activity {
                     try {
                         String value = options.getJSONObject(choice).optString("value", "");
                         captureBaselineForSelection = MainActivity.getCapturedMediaAt();
-                        MainActivity.applyEpisodeSelection(frameIndex, selectIndex, value);
+                        String optionPath = options.getJSONObject(choice).optString("path", "");
+                        MainActivity.applyEpisodeSelection(frameIndex, selectIndex, optionPath.isEmpty() ? value : optionPath);
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
                         updateEpisodeButtonLabels();
