@@ -12,9 +12,9 @@ def once(old, new, label):
     s=s.replace(old,new,1)
 
 once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map;\nimport java.util.HashMap;", "Map imports")
-once('    private boolean externalLaunchPending = false;
+once('    private boolean externalLaunchPending = false;', '''    private boolean externalLaunchPending = false;
     private volatile long mxPlayIntentUntil = 0L;
-    private volatile boolean mxOfferTriggered = false;', '''    private boolean externalLaunchPending = false;
+    private volatile boolean mxOfferTriggered = false;
     private final Object mediaCaptureLock = new Object();
     private String capturedMediaUrl = null;
     private String capturedMediaReferer = null;
