@@ -78,7 +78,7 @@ java = r"""
                 "if(Array.isArray(v)){v.slice(0,300).forEach(function(x){walk(x,d+1,k);});return;}" +
                 "if(typeof v==='object'){Object.keys(v).slice(0,300).forEach(function(n){walk(v[n],d+1,k);});}}" +
                 "function extract(t,k,d){if(d>4||t==null)return;if(typeof t!=='string')t=String(t);if(t.length>1000000)return;" +
-                "var s=t.split('\\/').join('/').split('\\u0026').join('&').split('&amp;').join('&');" +
+                "var s=t.split('\\\\/').join('/').split('\\\\u0026').join('&').split('&amp;').join('&');" +
                 "var i=0;while((i=s.indexOf('http',i))>=0){if(s.substr(i,7)!=='http://'&&s.substr(i,8)!=='https://'){i+=4;continue;}" +
                 "var j=i;while(j<s.length&&' \\t\\r\\n\\\"\\'<>'.indexOf(s.charAt(j))<0)j++;var u=s.substring(i,j);" +
                 "while(u.length&&'),.;]}'.indexOf(u.charAt(u.length-1))>=0)u=u.substring(0,u.length-1);send(u,k);i=Math.max(j,i+4);}" +
