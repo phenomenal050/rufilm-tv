@@ -465,14 +465,16 @@ public class NativePlayerActivity extends Activity {
                 if (option.optBoolean("selected", false)) selected = i;
             }
             final int selectIndex = selector.optInt("index", which);
-            final int frameIndex = selector.optInt("frameIndex", -1);
+            org.json.JSONArray framePath = selector.optJSONArray("framePath");
+            if (framePath == null) { framePath = new org.json.JSONArray(); int legacyFrame = selector.optInt("frameIndex", -1); if (legacyFrame >= 0) framePath.put(legacyFrame); }
+            final String framePathJson = framePath.toString();
             new AlertDialog.Builder(this).setTitle(which == 0 ? "Выбор сезона" : "Выбор серии")
                 .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
                     try {
                         String value = options.getJSONObject(choice).optString("value", "");
                         captureBaselineForSelection = MainActivity.getCapturedMediaAt();
                         String optionPath = options.getJSONObject(choice).optString("path", "");
-                        MainActivity.applyEpisodeSelection(frameIndex, selectIndex, optionPath.isEmpty() ? value : optionPath);
+                        MainActivity.applyEpisodeSelection(framePathJson, selectIndex, optionPath.isEmpty() ? value : optionPath);
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
                         updateEpisodeButtonLabels();
