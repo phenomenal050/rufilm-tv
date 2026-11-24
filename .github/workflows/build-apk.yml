@@ -96,7 +96,11 @@ jobs:
           grep -F 'addFullscreenControls();' patches/patch_player.py
           grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
           grep -F 'LocalStreamProxy.start(url, headers)' patches/patch_player.py
+          grep -F 'mpv-android (не установлен)' patches/patch_player.py
+          grep -F 'playerScroll' patches/patch_player.py
+          grep -F 'Always show the picker on every fullscreen entry.' patches/patch_player.py
           grep -F 'Использовать выбранный плеер по умолчанию' patches/patch_player.py
+          grep -F 'OPTIONS' patches/LocalStreamProxy.java
           test -s "rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java"
           grep -F 'private static class PlayerChoice' "$SRC"
           grep -F 'LocalStreamProxy.start(url, headers)' "$SRC"
