@@ -360,6 +360,9 @@ once('''        @JavascriptInterface public boolean isNativeEnabled() { return "
         @JavascriptInterface public void armMxPlayIntent() { MainActivity.this.armMxPlayIntent(); }
         @JavascriptInterface public void captureMxMedia(String url, String referer, String userAgent) {
             MainActivity.this.captureMxMedia(url, referer, userAgent);
+        }
+        @JavascriptInterface public void originalPlayerStopped(String frameUrl, int mediaCount) {
+            android.util.Log.i("RuFilmTV", "Original player stop acknowledged; media=" + mediaCount + ", frame=" + frameUrl);
         }''', "bridge method")
 
 
@@ -522,7 +525,7 @@ bridge_fields = '''
             "if(opts.length){out.push({frameIndex:id,index:-1,kind:kind,custom:true,selectedText:selectedText,options:opts});}try{trigger.click();}catch(e){}await wait(40);" +
             "}}var result=[];['season','episode'].forEach(function(k){var a=out.filter(function(x){return x.kind===k;});if(a.length)result.push(a[0]);});return JSON.stringify(result);" +
             "}catch(e){return '[]';}})()";
-        a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, callback); else if (callback != null) callback.onReceiveValue("[]"); });
+        a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, raw -> { android.util.Log.i("RuFilmTV", "Episode selector scan returned " + (raw == null ? -1 : raw.length()) + " chars"); if (callback != null) callback.onReceiveValue(raw); }); else if (callback != null) callback.onReceiveValue("[]"); });
     }
     private void saveOriginalPlayerLayout() {
         if (web == null) return;
