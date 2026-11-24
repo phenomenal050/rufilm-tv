@@ -97,6 +97,10 @@ jobs:
           grep -F 'x.framePath=fp' patches/patch_mx_crossframe.py
           grep -F 'applyEpisodeSelection(framePathJson' patches/NativePlayerActivity.java
           grep -F 'window.__rufilmOriginalSuspended=true' patches/patch_player.py
+          grep -F 'window.__rfStopAckSent' patches/patch_mx_crossframe.py
+          grep -F 'originalPlayerStopped' patches/patch_player.py
+          grep -F 'sendFrames(window,[],0)' patches/patch_player.py
+          grep -F 'Episode selector scan returned' patches/patch_player.py
           grep -F 'function playerNode(e)' patches/patch_player.py
           grep -F 'restore();return;' patches/patch_player.py
           grep -F 'playerMode = "original"' patches/patch_player.py
