@@ -1107,20 +1107,32 @@ once("    private void showPlayerDialog() {",
     }
 
     private void showAudioSyncDialog() {
-        final int[] offsets = {0, -100, -150, -200, -250, -275, -300, -400, -500};
-        String[] labels = {"0 мс — без коррекции", "100 мс", "150 мс", "200 мс",
-                "250 мс", "275 мс", "300 мс", "400 мс", "500 мс"};
-        int current = getAudioSyncOffsetMs();
+        java.util.ArrayList<Integer> values = new java.util.ArrayList<>();
+        values.add(0);
+        for (int value = -50; value >= -700; value -= 50) values.add(value);
+        for (int value = 10; value <= 100; value += 10) values.add(value);
+        for (int value = 150; value <= 700; value += 50) values.add(value);
+        final int[] offsets = new int[values.size()];
+        String[] labels = new String[values.size()];
         int selected = 0;
-        for (int i = 0; i < offsets.length; i++) if (offsets[i] == current) selected = i;
+        int current = getAudioSyncOffsetMs();
+        for (int i = 0; i < values.size(); i++) {
+            int value = values.get(i);
+            offsets[i] = value;
+            labels[i] = value == 0 ? "0 мс — без коррекции" :
+                (value < 0 ? "−" + (-value) + " мс" : "+" + value + " мс");
+            if (value == current) selected = i;
+        }
         new AlertDialog.Builder(this).setTitle("Синхронизация звука")
             .setSingleChoiceItems(labels, selected, (dialog, which) -> {
                 int value = offsets[which];
                 getSharedPreferences("rufilm_audio_sync", MODE_PRIVATE).edit()
                     .putInt("offset_ms", value).apply();
                 applyAudioSyncOffset(value);
-                Toast.makeText(this, value == 0 ? "Коррекция отключена" :
-                    "Запрошено опережение звука на " + (-value) + " мс", Toast.LENGTH_LONG).show();
+                String message = value == 0 ? "Коррекция отключена" :
+                    (value < 0 ? "Запрошено опережение звука на " + (-value) + " мс" :
+                        "Запрошена задержка звука на " + value + " мс");
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
                 dialog.dismiss();
             }).setNegativeButton("Закрыть", null).show();
     }
