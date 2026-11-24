@@ -328,6 +328,7 @@ public class NativePlayerActivity extends Activity {
         updateEpisodeButtonLabels();
         setContentView(root);
         showAssistantControls();
+        refreshEpisodeSelectorsSilently(0);
 
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
@@ -636,7 +637,7 @@ public class NativePlayerActivity extends Activity {
         if (assistantControls == null || controlsLocked) return;
         controlsVisible = false;
         assistantControls.setVisibility(View.GONE);
-        if (assistantTopBar != null) assistantTopBar.setVisibility(View.GONE);
+        // Keep season/episode selectors available on Android TV even when transport controls hide.
     }
     private void scheduleAssistantHide() {
         assistantHandler.removeCallbacks(hideAssistantRunnable);
