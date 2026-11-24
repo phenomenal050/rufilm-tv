@@ -82,6 +82,15 @@ public final class LocalStreamProxy {
             String[] requestParts = requestLine.split(" ");
             if (requestParts.length < 2) { writeError(output, 400, "Bad Request"); return; }
             String method = requestParts[0].toUpperCase(Locale.ROOT);
+            if ("OPTIONS".equals(method)) {
+                writeAscii(output, "HTTP/1.1 204 No Content\r\n");
+                writeAscii(output, "Access-Control-Allow-Origin: *\r\n");
+                writeAscii(output, "Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n");
+                writeAscii(output, "Access-Control-Allow-Headers: Range, If-Range, Accept, Origin, Referer\r\n");
+                writeAscii(output, "Access-Control-Max-Age: 86400\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                output.flush();
+                return;
+            }
             if (!"GET".equals(method) && !"HEAD".equals(method)) {
                 writeError(output, 405, "Method Not Allowed"); return;
             }
@@ -105,8 +114,10 @@ public final class LocalStreamProxy {
             upstream = (HttpURLConnection) new URL(target).openConnection();
             upstream.setInstanceFollowRedirects(true);
             upstream.setConnectTimeout(20000);
-            upstream.setReadTimeout(45000);
+            upstream.setReadTimeout(90000);
+            upstream.setUseCaches(false);
             upstream.setRequestMethod(method);
+            upstream.setRequestProperty("Connection", "close");
             for (Map.Entry<String, String> h : sessionHeaders.entrySet()) {
                 String key = h.getKey();
                 if (key == null || h.getValue() == null) continue;
@@ -130,14 +141,25 @@ public final class LocalStreamProxy {
                     if (h.getKey() != null && "cookie".equalsIgnoreCase(h.getKey()))
                         upstream.setRequestProperty("Cookie", h.getValue());
             }
+            // Do not apply byte ranges to rewritten manifests: their byte offsets and
+            // lengths change when child URLs are routed through this bridge.
+            boolean targetLooksLikeManifest = target.toLowerCase(Locale.ROOT).contains(".m3u8") ||
+                    target.toLowerCase(Locale.ROOT).contains(".mpd");
             for (String key : new String[]{"range", "if-range", "accept", "accept-language"}) {
                 String value = incoming.get(key);
-                if (value != null) upstream.setRequestProperty(key, value);
+                if (value != null && !(targetLooksLikeManifest &&
+                        ("range".equals(key) || "if-range".equals(key))))
+                    upstream.setRequestProperty(key, value);
             }
             upstream.setRequestProperty("Accept-Encoding", "identity");
 
             int status = upstream.getResponseCode();
             String type = upstream.getContentType();
+            try {
+                URL effective = upstream.getURL();
+                Log.i(TAG, method + " " + (effective == null ? "upstream" : effective.getHost()) +
+                        " -> HTTP " + status + (type == null ? "" : " (" + type + ")"));
+            } catch (Exception ignored) { }
             String lowerTarget = target.toLowerCase(Locale.ROOT);
             boolean manifest = lowerTarget.contains(".m3u8") || lowerTarget.contains(".mpd") ||
                     (type != null && (type.toLowerCase(Locale.ROOT).contains("mpegurl") ||
@@ -160,10 +182,15 @@ public final class LocalStreamProxy {
                     status == 404 ? "Not Found" : "Upstream";
             writeAscii(output, "HTTP/1.1 " + status + " " + reason + "\r\n");
             if (type != null) writeAscii(output, "Content-Type: " + type + "\r\n");
-            copyHeader(upstream, output, "Content-Range");
-            copyHeader(upstream, output, "Accept-Ranges");
+            if (manifestBytes == null) {
+                copyHeader(upstream, output, "Content-Range");
+                copyHeader(upstream, output, "Accept-Ranges");
+            }
             copyHeader(upstream, output, "ETag");
             copyHeader(upstream, output, "Last-Modified");
+            copyHeader(upstream, output, "Cache-Control");
+            copyHeader(upstream, output, "Expires");
+            copyHeader(upstream, output, "Content-Disposition");
             if (manifestBytes != null) {
                 writeAscii(output, "Content-Length: " + manifestBytes.length + "\r\n");
                 writeAscii(output, "Cache-Control: no-store\r\n");
@@ -171,8 +198,13 @@ public final class LocalStreamProxy {
                 writeAscii(output, "Connection: close\r\n\r\n");
                 output.write(manifestBytes);
             } else {
-                int length = upstream.getContentLength();
-                if (length >= 0) writeAscii(output, "Content-Length: " + length + "\r\n");
+                String lengthHeader = upstream.getHeaderField("Content-Length");
+                if (lengthHeader != null && !lengthHeader.isEmpty())
+                    writeAscii(output, "Content-Length: " + lengthHeader + "\r\n");
+                else {
+                    int length = upstream.getContentLength();
+                    if (length >= 0) writeAscii(output, "Content-Length: " + length + "\r\n");
+                }
                 writeAscii(output, "Access-Control-Allow-Origin: *\r\n");
                 writeAscii(output, "Connection: close\r\n\r\n");
                 if ("GET".equals(method) && status >= 200 && status < 400) {
