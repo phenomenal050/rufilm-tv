@@ -89,6 +89,9 @@ jobs:
           grep -F 'installAdCosmeticFilters();' "$SRC"
           grep -F 'isKnownAdRequest(String url)' patches/patch_player.py
           grep -F 'isKnownAdRequest(requestUrl)' patches/patch_player.py
+          grep -F 'replace(/\\\\s+/g' patches/patch_mx_crossframe.py
+          grep -F 'window.__rufilmFrameObserver' patches/patch_player.py
+          grep -F 'function stopOriginal()' patches/patch_mx_crossframe.py
           grep -F 'function playerNode(e)' patches/patch_player.py
           grep -F 'restore();return;' patches/patch_player.py
           grep -F 'playerMode = "original"' patches/patch_player.py
