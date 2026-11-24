@@ -11,7 +11,7 @@ def once(old, new, label):
         return
     s=s.replace(old,new,1)
 
-once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map;\nimport java.util.HashMap;", "Map imports")
+once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map;\nimport java.util.HashMap;\nimport androidx.webkit.WebViewCompat;\nimport androidx.webkit.WebViewFeature;", "Map and WebViewCompat imports")
 once('    private boolean externalLaunchPending = false;', '''    private boolean externalLaunchPending = false;
     private volatile long mxPlayIntentUntil = 0L;
     private volatile boolean mxOfferTriggered = false;
@@ -25,7 +25,46 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private long lastNativePlayerLaunchAt = 0L;
     private boolean nativePlayerLaunching = false;''', "media fields")
 
-anchor = "    // ABP-style network filtering; the cinema origin and ordinary media requests are exempt."
+anchor = "    // Install a document-start bridge in EVERY frame, including cross-origin Alloha iframes.
+    // This is the receiver missing from the previous postMessage-only implementation.
+    private void installCrossFrameBridge() {
+        if (web == null || !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            android.util.Log.e("RuFilmTV", "Cross-frame bridge unavailable: DOCUMENT_START_SCRIPT unsupported");
+            return;
+        }
+        final String script =
+            "(function(){try{if(window.__rfAllFrameBridge)return;window.__rfAllFrameBridge=true;" +
+            "function txt(e){return (e&&(e.innerText||e.textContent)||'').replace(/\\\\s+/g,' ').trim();}" +
+            "function sendSelectors(frame){var out=[],sels=[].slice.call(document.querySelectorAll('select'));" +
+            "sels.forEach(function(x,i){if(!x.options||x.options.length<2)return;var p=x.parentElement,meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),txt(p)].join(' ').toLowerCase();" +
+            "var opts=[].map.call(x.options,function(o){return {text:txt(o),value:o.value,selected:o.selected};});var words=opts.map(function(o){return o.text;}).join(' ').toLowerCase();" +
+            "var kind=/season|сезон/.test(meta+' '+words)?'season':(/episode|серия|эпизод/.test(meta+' '+words)?'episode':'');" +
+            "if(kind)out.push({frameIndex:frame,index:i,kind:kind,selectedText:opts[x.selectedIndex]?opts[x.selectedIndex].text:'',options:opts});});" +
+            "var numeric=sels.map(function(x,i){var o=[].slice.call(x.options||[]),p=x.parentElement,m=[x.name,x.id,x.className,txt(p)].join(' ').toLowerCase();" +
+            "return {x:x,i:i,m:m,ok:o.length>1&&!/не требуется|quality|качество|озвучка|субтитр/.test(m)&&o.every(function(z){return /^\\\\s*\\\\d+\\\\s*$/.test(txt(z));})};}).filter(function(x){return x.ok;});" +
+            "if(!out.some(function(x){return x.kind==='season'})&&numeric.length)out.push({frameIndex:frame,index:numeric[0].i,kind:'season',selectedText:txt(numeric[0].x.options[numeric[0].x.selectedIndex]),options:[].map.call(numeric[0].x.options,function(o){return {text:txt(o),value:o.value,selected:o.selected};})});" +
+            "if(!out.some(function(x){return x.kind==='episode'})&&numeric.length>1)out.push({frameIndex:frame,index:numeric[1].i,kind:'episode',selectedText:txt(numeric[1].x.options[numeric[1].x.selectedIndex]),options:[].map.call(numeric[1].x.options,function(o){return {text:txt(o),value:o.value,selected:o.selected};})});" +
+            "try{window.parent.postMessage({__rfEpisodeSelectors:out},'*');}catch(e){}};" +
+            "function stopVideo(v){try{v.pause();v.muted=true;v.volume=0;v.style.setProperty('display','none','important');v.style.setProperty('visibility','hidden','important');v.style.setProperty('pointer-events','none','important');" +
+            "if(!v.__rfStopGuard){v.__rfStopGuard=true;var stop=function(){try{v.pause();v.muted=true;v.volume=0;}catch(e){}};v.addEventListener('play',stop,true);v.addEventListener('playing',stop,true);try{v.play=function(){stop();return Promise.resolve();};}catch(e){}}}catch(e){}}" +
+            "function suspend(){window.__rfOriginalSuspended=true;document.querySelectorAll('video,audio').forEach(stopVideo);}" +
+            "window.addEventListener('message',function(e){try{var d=e.data||{};" +
+            "if(d.__rfGetEpisodeSelectors)sendSelectors(Number(d.frameIndex));" +
+            "if(d.__rfEpisodeSelect){var q=d.__rfEpisodeSelect,el=null;if(q.index>=0)el=document.querySelectorAll('select')[q.index];" +
+            "if(el){el.value=String(q.value);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}" +
+            "else if(q.index<0){try{var n=document.querySelector(String(q.value));if(n)n.click();}catch(x){}}}" +
+            "if(d.__rufilmStopOriginal)suspend();}catch(x){}},true);" +
+            "if(document.documentElement&&!window.__rfStopObserver){window.__rfStopObserver=new MutationObserver(function(){if(window.__rfOriginalSuspended)document.querySelectorAll('video,audio').forEach(stopVideo);});window.__rfStopObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
+            "}catch(e){}})();";
+        try {
+            WebViewCompat.addDocumentStartJavaScript(web, script, java.util.Collections.singleton("*"));
+            android.util.Log.i("RuFilmTV", "Cross-frame Alloha/player bridge installed for all origins");
+        } catch (Exception e) {
+            android.util.Log.e("RuFilmTV", "Cross-frame bridge installation failed", e);
+        }
+    }
+
+    // ABP-style network filtering; the cinema origin and ordinary media requests are exempt."
 capture = '''    // Never let the ad filter intercept actual video manifests or media segments.
     private boolean isRuFilmMediaRequest(String url) {
         if (url == null) return false;
@@ -591,6 +630,7 @@ if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21)
             android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+        installCrossFrameBridge();
         try {
             String ua = web.getSettings().getUserAgentString();
             if (ua != null) web.getSettings().setUserAgentString(ua.replace("; wv", "").replace("Version/4.0 ", ""));
