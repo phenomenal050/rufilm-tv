@@ -123,7 +123,7 @@ jobs:
 
       - name: Publish GitHub Release with APK and checksum
         env:
-          GH_TOKEN: ${{ secrets.RUFILMTV_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if ! gh auth status >/dev/null 2>&1; then
