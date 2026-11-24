@@ -73,7 +73,6 @@ jobs:
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
-          python3 patches/patch_manifest.py rufilm-tv-2.9/app/src/main/AndroidManifest.xml
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
@@ -93,20 +92,13 @@ jobs:
           grep -F 'function playerNode(e)' patches/patch_player.py
           grep -F 'restore();return;' patches/patch_player.py
           grep -F 'playerMode = "original"' patches/patch_player.py
-          grep -F 'Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.' patches/patch_player.py
+          grep -F 'Media3 is the only playback engine' patches/patch_player.py
+          grep -F 'MainActivity.this.armMxPlayIntent();' patches/patch_player.py
+          grep -F 'launchCapturedMedia()' patches/patch_player.py
+          grep -F 'try{v.pause();}catch(e){}' patches/patch_player.py
           grep -F 'addFullscreenControls();' patches/patch_player.py
           grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
           grep -F 'LocalStreamProxy.start(url, headers)' patches/patch_player.py
-          grep -F 'mpv-android (не установлен)' patches/patch_player.py
-          grep -F 'playerScroll' patches/patch_player.py
-          grep -F 'Always show the picker on every fullscreen entry.' patches/patch_player.py
-          grep -F 'Использовать выбранный плеер по умолчанию' patches/patch_player.py
-          grep -F 'OPTIONS' patches/LocalStreamProxy.java
-          test -s "rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java"
-          grep -F 'private static class PlayerChoice' "$SRC"
-          grep -F 'com.mxtech.videoplayer.ad' rufilm-tv-2.9/app/src/main/AndroidManifest.xml
-          grep -F 'com.mxtech.videoplayer.pro' rufilm-tv-2.9/app/src/main/AndroidManifest.xml
-          grep -F 'LocalStreamProxy.start(url, headers)' "$SRC"
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
