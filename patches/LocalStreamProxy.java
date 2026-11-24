@@ -247,7 +247,7 @@ public final class LocalStreamProxy {
         return a.toString();
     }
 
-    private static String makeProxyUrl(String target) throws Exception {
+    private static String makeProxyUrl(String target) throws IOException {
         String encoded = URLEncoder.encode(target, "UTF-8")
                 .replace("%24Number%24", "$Number$")
                 .replace("%24Time%24", "$Time$")
