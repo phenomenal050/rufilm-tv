@@ -318,7 +318,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                                 " playing=" + snapshot.optBoolean("playing", false) +
                                 " score=" + snapshot.optInt("score", -1));
                         } catch (Exception ignored) { }
-                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var w=d.defaultView||window;var v=w.__rufilmActiveVideo;if(!v)return;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});if(n===d.documentElement)break;n=n.parentElement;}w.__rufilmSavedPlayerLayout={video:v,nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused,time:v.currentTime};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}});return true;})()", null);
+                        web.evaluateJavascript("(function(){window.__rufilmNativeActive=true;window.__rufilmOriginalSuspended=true;(function send(w,n){if(n>6)return;try{w.postMessage({__rufilmStopOriginal:true},'*');for(var i=0;i<w.frames.length;i++)send(w.frames[i],n+1);}catch(e){}})(window,0);var docs=[document];try{for(var i=0;i<window.frames.length;i++)try{docs.push(window.frames[i].document);}catch(e){}}catch(e){}docs.forEach(function(d){var w=d.defaultView||window;var v=w.__rufilmActiveVideo;if(!v)return;if(!w.__rufilmSavedPlayerLayout){var nodes=[],n=v;while(n){nodes.push({el:n,style:n.getAttribute('style'),cls:n.getAttribute('class')});if(n===d.documentElement)break;n=n.parentElement;}w.__rufilmSavedPlayerLayout={video:v,nodes:nodes,muted:v.muted,volume:v.volume,paused:v.paused,time:v.currentTime};}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}});return true;})()", null);
                         web.postDelayed(() -> {
                             try { startActivity(launchIntent); }
                             catch (Exception e) {
@@ -494,17 +494,21 @@ premium_nav = r'''
 # Expose the current activity for the native player's episode and clock callbacks.
 bridge_fields = '''
     private static MainActivity rufilmActiveInstance;
-    public static void applyEpisodeSelection(int frameIndex, int index, String value) {
+    public static void applyEpisodeSelection(String framePathJson, int index, String value) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
-        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){if(" + frameIndex + ">=0){try{window.frames[" + frameIndex + "].postMessage({__rfEpisodeSelect:{index:" + index + ",value:" + quoted + "}},'*');return true;}catch(e){return false;}}var d=document;var s=d.querySelectorAll('select')[" + index + "];if(s){s.value=" + quoted + ";var w=d.defaultView||window;s.dispatchEvent(new w.Event('input',{bubbles:true}));s.dispatchEvent(new w.Event('change',{bubbles:true}));return true;}try{var e=d.querySelector(" + quoted + ");if(e){e.click();return true;}}catch(x){}return false;})()", null));
+        org.json.JSONArray path;
+        try { path = new org.json.JSONArray(framePathJson == null ? "[]" : framePathJson); }
+        catch (Exception ignored) { path = new org.json.JSONArray(); }
+        final String pathLiteral = path.toString();
+        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){try{var p=" + pathLiteral + ",w=window;for(var i=0;i<p.length;i++)w=w.frames[p[i]];w.postMessage({__rfEpisodeSelect:{index:" + index + ",value:" + quoted + "}},'*');return true;}catch(e){return false;}})()", null));
     }
     public static void refreshEpisodeSelectors(android.webkit.ValueCallback<String> callback) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) { if (callback != null) callback.onReceiveValue("[]"); return; }
         final String js = "(async function(){try{" +
-            "var ds=[document],ids=[-1];window.__rfEpisodeFrameResults=[];if(!window.__rfEpisodeListener){window.__rfEpisodeListener=true;window.addEventListener('message',function(e){try{if(e.data&&e.data.__rfEpisodeSelectors)window.__rfEpisodeFrameResults=window.__rfEpisodeFrameResults.concat(e.data.__rfEpisodeSelectors);}catch(x){}});}for(var fi=0;fi<window.frames.length;fi++){try{window.frames[fi].postMessage({__rfGetEpisodeSelectors:true,frameIndex:fi},'*');}catch(x){}}" +
+            "var ds=[document],ids=[-1];window.__rfEpisodeFrameResults=[];if(!window.__rfEpisodeListener){window.__rfEpisodeListener=true;window.addEventListener('message',function(e){try{if(e.data&&e.data.__rfEpisodeSelectors)window.__rfEpisodeFrameResults=window.__rfEpisodeFrameResults.concat(e.data.__rfEpisodeSelectors);}catch(x){}});}function sendFrames(w,path,depth){if(depth>6)return;try{for(var fi=0;fi<w.frames.length;fi++){var child=w.frames[fi],next=path.concat([fi]);try{child.postMessage({__rfGetEpisodeSelectors:true,framePath:next},'*');}catch(x){}sendFrames(child,next,depth+1);}}catch(x){}}sendFrames(window,[],0);" +
             "function path(e){if(!e||!e.parentElement)return '';if(e.id)return '#'+CSS.escape(e.id);var a=[],n=e;while(n&&n.nodeType===1&&n!==n.ownerDocument.documentElement){var t=n.tagName.toLowerCase(),k=1,p=n;while((p=p.previousElementSibling))if(p.tagName===n.tagName)k++;a.unshift(t+':nth-of-type('+k+')');n=n.parentElement;}return 'html>'+a.join('>');}" +
             "function vis(e){if(!e)return false;var r=e.getBoundingClientRect(),s=(e.ownerDocument.defaultView||window).getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0';}" +
             "function txt(e){return (e.innerText||e.textContent||'').replace(/\\\\s+/g,' ').trim();}function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}await wait(900);" +
