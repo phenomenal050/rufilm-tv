@@ -259,7 +259,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         final String id, label, packageName;
         final boolean installed;
         PlayerChoice(String id, String label, String packageName) {
-            this(id, label, packageName, packageName == null);
+            // Three-argument choices are added only when the external package is installed.
+            // Treat them as enabled; mpv uses the four-argument constructor for its
+            // explicit installed/not-installed placeholder row.
+            this(id, label, packageName, true);
         }
         PlayerChoice(String id, String label, String packageName, boolean installed) {
             this.id = id; this.label = label; this.packageName = packageName; this.installed = installed;
