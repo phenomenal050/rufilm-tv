@@ -9,7 +9,7 @@ on:
         default: "v3.1.0"
         type: string
   push:
-    branches: [main, beta]
+    branches: [main]
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
