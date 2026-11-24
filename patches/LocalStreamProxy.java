@@ -107,21 +107,28 @@ public final class LocalStreamProxy {
             upstream.setConnectTimeout(20000);
             upstream.setReadTimeout(45000);
             upstream.setRequestMethod(method);
-            boolean suppliedCookie = false;
             for (Map.Entry<String, String> h : sessionHeaders.entrySet()) {
                 String key = h.getKey();
                 if (key == null || h.getValue() == null) continue;
                 String lower = key.toLowerCase(Locale.ROOT);
                 if (lower.equals("host") || lower.equals("connection") || lower.equals("content-length") ||
-                        lower.equals("accept-encoding")) continue;
-                if (lower.equals("cookie")) suppliedCookie = true;
+                        lower.equals("accept-encoding") || lower.equals("cookie")) continue;
                 upstream.setRequestProperty(key, h.getValue());
             }
-            if (!suppliedCookie) {
-                try {
-                    String cookie = CookieManager.getInstance().getCookie(target);
-                    if (cookie != null && !cookie.isEmpty()) upstream.setRequestProperty("Cookie", cookie);
-                } catch (Exception ignored) { }
+            // Cookies are host/path scoped: resolve them separately for each child playlist,
+            // segment and encryption-key URL instead of reusing the manifest host's cookie.
+            try {
+                String cookie = CookieManager.getInstance().getCookie(target);
+                if (cookie != null && !cookie.isEmpty()) upstream.setRequestProperty("Cookie", cookie);
+                else {
+                    for (Map.Entry<String, String> h : sessionHeaders.entrySet())
+                        if (h.getKey() != null && "cookie".equalsIgnoreCase(h.getKey()))
+                            upstream.setRequestProperty("Cookie", h.getValue());
+                }
+            } catch (Exception ignored) {
+                for (Map.Entry<String, String> h : sessionHeaders.entrySet())
+                    if (h.getKey() != null && "cookie".equalsIgnoreCase(h.getKey()))
+                        upstream.setRequestProperty("Cookie", h.getValue());
             }
             for (String key : new String[]{"range", "if-range", "accept", "accept-language"}) {
                 String value = incoming.get(key);
