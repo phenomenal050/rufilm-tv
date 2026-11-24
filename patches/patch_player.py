@@ -489,7 +489,7 @@ resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);' + s[body_end:]
+        s = s[:body_end] + '\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
@@ -502,6 +502,24 @@ else:
 
 ''' + s[class_end:]
 
+
+# The vendor HAL request may affect the device audio path, so clear it when app loses foreground.
+pause = re.search(r'((?:public|protected)\\s+void\\s+onPause\\s*\\(\\s*\\)\\s*\\{)', s)
+if pause:
+    body_end = pause.end()
+    if 'applyAudioSyncOffset(0);' not in s[body_end:body_end + 240]:
+        s = s[:body_end] + '\\n        applyAudioSyncOffset(0);' + s[body_end:]
+else:
+    class_end = s.rfind('}')
+    if class_end < 0:
+        raise SystemExit('Could not find MainActivity class end for onPause')
+    s = s[:class_end] + '''
+    @Override protected void onPause() {
+        applyAudioSyncOffset(0);
+        super.onPause();
+    }
+
+''' + s[class_end:]
 
 # Use the same HTML5 element for fullscreen; never auto-launch a second ExoPlayer.
 hook_start = s.find("    private void injectExternalPlayerHook(WebView view) {")
@@ -1070,7 +1088,7 @@ once('        Button search=button("⌕",true);',
      "app menu and refresh button")
 once("    private void showPlayerDialog() {",
      '''    private int getAudioSyncOffsetMs() {
-        return getSharedPreferences("rufilm_audio_sync", MODE_PRIVATE).getInt("offset_ms", -250);
+        return getSharedPreferences("rufilm_audio_sync", MODE_PRIVATE).getInt("offset_ms", -275);
     }
 
     private void applyAudioSyncOffset(int offsetMs) {
@@ -1089,9 +1107,9 @@ once("    private void showPlayerDialog() {",
     }
 
     private void showAudioSyncDialog() {
-        final int[] offsets = {0, -100, -150, -200, -250, -300, -400, -500};
+        final int[] offsets = {0, -100, -150, -200, -250, -275, -300, -400, -500};
         String[] labels = {"0 мс — без коррекции", "100 мс", "150 мс", "200 мс",
-                "250 мс", "300 мс", "400 мс", "500 мс"};
+                "250 мс", "275 мс", "300 мс", "400 мс", "500 мс"};
         int current = getAudioSyncOffsetMs();
         int selected = 0;
         for (int i = 0; i < offsets.length; i++) if (offsets[i] == current) selected = i;
