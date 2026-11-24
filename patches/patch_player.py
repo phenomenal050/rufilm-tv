@@ -298,7 +298,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 
     private boolean isPlayerChoiceAvailable(String id) {
         if ("original".equals(id) || "media3".equals(id)) return true;
-        for (PlayerChoice choice : getAvailablePlayerChoices()) if (choice.id.equals(id)) return true;
+        for (PlayerChoice choice : getAvailablePlayerChoices())
+            if (choice.id.equals(id)) return choice.installed;
         return false;
     }
 
@@ -335,7 +336,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                 radio.setMinHeight((int)(48 * getResources().getDisplayMetrics().density));
                 radio.setEnabled(choice.installed);
                 group.addView(radio);
-                if (choice.id.equals(saved)) selectedId = radio.getId();
+                if (choice.id.equals(saved) && choice.installed) selectedId = radio.getId();
                 if (selectedId < 0 && "original".equals(choice.id)) selectedId = radio.getId();
             }
             if (selectedId >= 0) group.check(selectedId);
@@ -347,6 +348,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                     (int)(getResources().getDisplayMetrics().heightPixels * 0.55f));
             content.addView(playerScroll, new android.widget.LinearLayout.LayoutParams(
                     -1, Math.max(dp(144), maxPlayerListHeight)));
+            android.widget.TextView playerHint = new android.widget.TextView(this);
+            playerHint.setText("mpv-android станет доступен после установки отдельного приложения mpv-android.");
+            playerHint.setTextSize(12);
+            playerHint.setPadding(dp(4), dp(6), dp(4), dp(2));
+            content.addView(playerHint);
             android.widget.CheckBox remember = new android.widget.CheckBox(this);
             remember.setText("Использовать выбранный плеер по умолчанию");
             remember.setTextSize(14);
