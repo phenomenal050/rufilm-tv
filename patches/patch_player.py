@@ -128,7 +128,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         String url = request.getUrl().toString();
         String lower = url.toLowerCase(Locale.ROOT);
         boolean playlist = lower.contains(".m3u8") || lower.contains(".mpd");
-        boolean directVideo = lower.matches(".*\\.(mp4|m4v|webm)(?:[?#].*)?$");
+        boolean directVideo = lower.contains(".mp4") || lower.contains(".m4v") || lower.contains(".webm");
         if (!(playlist || directVideo) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
         saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
