@@ -498,25 +498,24 @@ bridge_fields = '''
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) return;
         final String quoted = org.json.JSONObject.quote(value == null ? "" : value);
-        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){return false;}var s=d.querySelectorAll('select')[" + index + "];if(!s)return false;s.value=" + quoted + ";var w=d.defaultView||window;s.dispatchEvent(new w.Event('input',{bubbles:true}));s.dispatchEvent(new w.Event('change',{bubbles:true}));return true;})()", null));
+        a.runOnUiThread(() -> a.web.evaluateJavascript("(function(){var d=document;try{if(" + frameIndex + ">=0)d=window.frames[" + frameIndex + "].document;}catch(e){return false;}var s=d.querySelectorAll('select')[" + index + "];if(s){s.value=" + quoted + ";var w=d.defaultView||window;s.dispatchEvent(new w.Event('input',{bubbles:true}));s.dispatchEvent(new w.Event('change',{bubbles:true}));return true;}try{var e=d.querySelector(" + quoted + ");if(e){e.click();return true;}}catch(x){}return false;})()", null));
     }
     public static void refreshEpisodeSelectors(android.webkit.ValueCallback<String> callback) {
         MainActivity a = rufilmActiveInstance;
         if (a == null || a.web == null) { if (callback != null) callback.onReceiveValue("[]"); return; }
-        final String js = "(function(){var ds=[document],ids=[-1];try{for(var i=0;i<window.frames.length;i++)try{var d=window.frames[i].document;if(d){ds.push(d);ids.push(i);}}catch(e){}}catch(e){}" +
-            "var all=[];ds.forEach(function(d,k){var v=d.querySelector('video');var sels=[].slice.call(d.querySelectorAll('select'));sels.forEach(function(x,i){if(!x.options||x.options.length<2)return;" +
-            "var p=x.parentElement;var meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title')].join(' ').toLowerCase();var nearby=p?p.innerText.toLowerCase():'';" +
-            "var o=[].map.call(x.options,function(q){return {text:(q.textContent||'').trim(),value:q.value,selected:q.selected};});var words=o.map(function(q){return q.text;}).join(' ').toLowerCase();" +
-            "var sm=/season|сезон/.test(meta),em=/episode|серия|эпизод/.test(meta),sw=/season|сезон/.test(words),ew=/episode|серия|эпизод/.test(words);" +
-            "var kind=sm?'season':(em?'episode':(sw&&!ew?'season':(ew&&!sw?'episode':'other')));" +
-            "var score=(kind==='other'?0:100)+(/player|video|serial|series|плеер|сериал/.test(meta+' '+nearby)?35:0);" +
-            "if(v){var n=v,dist=0;while(n&&dist<9){if(n.contains&&n.contains(x)){score+=Math.max(5,30-dist*3);break;}n=n.parentElement;dist++;}}" +
-            "if(o.length>80)score-=25;all.push({frameIndex:ids[k],index:i,meta:meta,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o,words:words,score:score,kind:kind});});});" +
-            "var seasons=all.filter(function(x){return x.kind==='season'}).sort(function(a,b){return b.score-a.score;});" +
-            "var episodes=all.filter(function(x){return x.kind==='episode'}).sort(function(a,b){return b.score-a.score;});" +
-            "if(!seasons.length||!episodes.length){var rest=all.filter(function(x){return x.kind==='other'}).sort(function(a,b){return b.score-a.score;});" +
-            "if(!seasons.length&&rest.length)seasons.push(rest.shift());if(!episodes.length&&rest.length)episodes.push(rest.shift());}" +
-            "var z=[];if(seasons.length)z.push(seasons[0]);if(episodes.length)z.push(episodes[0]);return JSON.stringify(z);})()";
+        final String js = "(async function(){try{" +
+            "var ds=[document],ids=[-1];function collect(w,depth){if(depth>5)return;try{for(var i=0;i<w.frames.length;i++){try{var f=w.frames[i];ds.push(f.document);ids.push(i);collect(f,depth+1);}catch(e){}}}catch(e){}}collect(window,0);" +
+            "function path(e){if(!e||!e.parentElement)return '';if(e.id)return '#'+CSS.escape(e.id);var a=[],n=e;while(n&&n.nodeType===1&&n!==n.ownerDocument.documentElement){var t=n.tagName.toLowerCase(),k=1,p=n;while((p=p.previousElementSibling))if(p.tagName===n.tagName)k++;a.unshift(t+':nth-of-type('+k+')');n=n.parentElement;}return 'html>'+a.join('>');}" +
+            "function vis(e){if(!e)return false;var r=e.getBoundingClientRect(),s=(e.ownerDocument.defaultView||window).getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0';}" +
+            "function txt(e){return (e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim();}function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}" +
+            "var out=[];for(var di=0;di<ds.length;di++){var d=ds[di],id=ids[di],sels=[].slice.call(d.querySelectorAll('select'));" +
+            "sels.forEach(function(x,i){if(!x.options||x.options.length<2)return;var p=x.parentElement,meta=[x.name,x.id,x.className,x.getAttribute('aria-label'),x.getAttribute('title'),p?txt(p):''].join(' ').toLowerCase();var o=[].map.call(x.options,function(q){return {text:txt(q),value:q.value,selected:q.selected};});var words=o.map(function(q){return q.text;}).join(' ').toLowerCase();var kind=/season|сезон/.test(meta+' '+words)?'season':(/episode|серия|эпизод/.test(meta+' '+words)?'episode':'');if(kind)out.push({frameIndex:id,index:i,kind:kind,selectedText:o[x.selectedIndex]?o[x.selectedIndex].text:'',options:o});});" +
+            "for(var kind of ['season','episode']){if(out.some(function(x){return x.frameIndex===id&&x.kind===kind;}))continue;var re=kind==='season'?/^сезон\\s*[:№]?\\s*\\d+$/i:/^(серия|эпизод)\\s*[:№]?\\s*\\d+$/i;" +
+            "var triggers=[].slice.call(d.querySelectorAll('button,[role=combobox],[aria-haspopup],[class*=select],[class*=dropdown]')).filter(function(e){return vis(e)&&re.test(txt(e))&&txt(e).length<40;});if(!triggers.length)continue;triggers.sort(function(a,b){return (a.tagName==='BUTTON'?-1:0)-(b.tagName==='BUTTON'?-1:0);});var trigger=triggers[0],selectedText=txt(trigger),triggerPath=path(trigger);try{trigger.click();}catch(e){}await wait(140);" +
+            "var opts=[];[].slice.call(d.querySelectorAll('*')).forEach(function(e){if(!vis(e)||e.children.length>3)return;var t=txt(e);if(!re.test(t)||t.length>40)return;var p=path(e);if(!p||opts.some(function(o){return o.path===p;}))return;opts.push({text:t,value:t,path:p,selected:t===selectedText});});" +
+            "if(opts.length){out.push({frameIndex:id,index:-1,kind:kind,custom:true,selectedText:selectedText,options:opts});}try{trigger.click();}catch(e){}await wait(40);" +
+            "}}var result=[];['season','episode'].forEach(function(k){var a=out.filter(function(x){return x.kind===k;});if(a.length)result.push(a[0]);});return JSON.stringify(result);" +
+            "}catch(e){return '[]';}})()";
         a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, callback); else if (callback != null) callback.onReceiveValue("[]"); });
     }
     private void saveOriginalPlayerLayout() {
