@@ -68,7 +68,7 @@ java = r"""
 
             String js =
                 "(function(){try{if(window.__rufilmCrossFrameHook)return;window.__rufilmCrossFrameHook=true;" +
-                "function send(u,k){try{if(!u||!/^https?:\\/\\//i.test(u))return;" +
+                "function send(u,k){try{if(!u||!(u.indexOf('https://')===0||u.indexOf('http://')===0))return;" +
                 "var x=u.toLowerCase(),ok=false;['.m3u8','.mpd','.mp4','.m4v','.webm'].forEach(function(e){" +
                 "var p=x.indexOf(e);if(p>=0&&(p+e.length===x.length||['?','&','#'].indexOf(x.charAt(p+e.length))>=0))ok=true;});" +
                 "if(!ok)return;var o=window.RuFilmCapture;if(o&&o.postMessage)o.postMessage(JSON.stringify({" +
@@ -111,6 +111,16 @@ if "private void installCrossFrameMediaCapture" not in s:
     if marker not in s:
         raise SystemExit("Missing PlayerBridge insertion anchor")
     s = s.replace(marker, java + marker, 1)
+
+# Add the iframe origin required by some external stream servers.
+origin_old = '        if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);'
+origin_new = origin_old + """
+        try {
+            Uri ref = Uri.parse(referer);
+            if (ref.getScheme() != null && ref.getAuthority() != null)
+                headers.put("Origin", ref.getScheme() + "://" + ref.getAuthority());
+        } catch (Exception ignored) { }"""
+once(origin_old, origin_new, "Origin header for external player handoff")
 
 path.write_text(s, encoding="utf-8")
 print("Patched", path)
