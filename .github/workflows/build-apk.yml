@@ -98,7 +98,6 @@ jobs:
           grep -F 'try{v.pause();}catch(e){}' patches/patch_player.py
           grep -F 'addFullscreenControls();' patches/patch_player.py
           grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
-          grep -F 'LocalStreamProxy.start(url, headers)' patches/patch_player.py
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
