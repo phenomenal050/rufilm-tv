@@ -95,6 +95,11 @@ jobs:
           grep -F 'Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.' patches/patch_player.py
           grep -F 'addFullscreenControls();' patches/patch_player.py
           grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
+          grep -F 'LocalStreamProxy.start(url, headers)' patches/patch_player.py
+          grep -F 'Использовать выбранный плеер по умолчанию' patches/patch_player.py
+          test -s "rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java"
+          grep -F 'private static class PlayerChoice' "$SRC"
+          grep -F 'LocalStreamProxy.start(url, headers)' "$SRC"
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
