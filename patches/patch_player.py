@@ -127,7 +127,9 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                 !"GET".equalsIgnoreCase(request.getMethod())) return;
         String url = request.getUrl().toString();
         String lower = url.toLowerCase(Locale.ROOT);
-        if (!(lower.contains(".m3u8") || lower.contains(".mpd")) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
+        boolean playlist = lower.contains(".m3u8") || lower.contains(".mpd");
+        boolean directVideo = lower.matches(".*\\.(mp4|m4v|webm)(?:[?#].*)?$");
+        if (!(playlist || directVideo) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
         saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
         Map<String, String> safeHeaders = new HashMap<>();
@@ -162,6 +164,90 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         }
         android.util.Log.i("RuFilmTV", "Captured media manifest: " + Uri.parse(url).getHost());
         // Launch only after the site's fullscreen request; keep episode selection available.
+    }
+
+    private boolean isMxPackageInstalled(String packageName) {
+        try { getPackageManager().getPackageInfo(packageName, 0); return true; }
+        catch (Exception ignored) { return false; }
+    }
+
+    private void offerMxPlayer(long positionMs) {
+        synchronized (mediaCaptureLock) {
+            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                    "Не удалось получить прямую ссылку для MX Player. Продолжайте в оригинальном плеере.",
+                    Toast.LENGTH_LONG).show());
+                return;
+            }
+        }
+        runOnUiThread(() -> {
+            boolean free = isMxPackageInstalled("com.mxtech.videoplayer.ad");
+            boolean pro = isMxPackageInstalled("com.mxtech.videoplayer.pro");
+            if (!free && !pro) {
+                Toast.makeText(MainActivity.this,
+                    "MX Player не установлен. Оригинальный плеер продолжает работу.",
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
+            new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Где воспроизводить видео?")
+                .setMessage("Можно открыть текущий поток во внешнем MX Player.")
+                .setPositiveButton("Открыть в MX Player", (dialog, which) -> {
+                    if (free && pro) {
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Выберите MX Player")
+                            .setItems(new String[]{"MX Player (бесплатный)", "MX Player Pro"}, (d, choice) ->
+                                launchMxPlayer(choice == 0 ? "com.mxtech.videoplayer.ad" : "com.mxtech.videoplayer.pro", positionMs))
+                            .setNegativeButton("Отмена", null)
+                            .show();
+                    } else {
+                        launchMxPlayer(free ? "com.mxtech.videoplayer.ad" : "com.mxtech.videoplayer.pro", positionMs);
+                    }
+                })
+                .setNegativeButton("Продолжить здесь", null)
+                .show();
+        });
+    }
+
+    private void launchMxPlayer(String packageName, long positionMs) {
+        final String url;
+        final HashMap<String, String> headers;
+        synchronized (mediaCaptureLock) {
+            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) {
+                Toast.makeText(this, "Ссылка на видео устарела. Нажмите Play ещё раз.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            url = capturedMediaUrl;
+            headers = new HashMap<>(capturedMediaHeaders);
+        }
+        try {
+            String activityName = "com.mxtech.videoplayer.ad".equals(packageName)
+                ? "com.mxtech.videoplayer.ad.ActivityScreen"
+                : "com.mxtech.videoplayer.ActivityScreen";
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            intent.setClassName(packageName, activityName);
+            String lower = url.toLowerCase(java.util.Locale.ROOT);
+            String mime = lower.contains(".m3u8") ? "application/x-mpegURL" :
+                (lower.contains(".mpd") ? "application/dash+xml" : "video/*");
+            intent.setDataAndType(android.net.Uri.parse(url), mime);
+            intent.putExtra("title", "RuFilmTV");
+            intent.putExtra("secure_uri", true);
+            intent.putExtra("position", (int)Math.max(0L, Math.min(2147483647L, positionMs)));
+            String[] mxHeaders = new String[headers.size() * 2];
+            int index = 0;
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                mxHeaders[index++] = entry.getKey();
+                mxHeaders[index++] = entry.getValue();
+            }
+            if (mxHeaders.length > 0) intent.putExtra("headers", mxHeaders);
+            if (web != null) {
+                web.evaluateJavascript("(function(){try{document.querySelectorAll('video').forEach(function(v){v.pause();});}catch(e){}})();", null);
+            }
+            startActivity(intent);
+        } catch (Exception e) {
+            android.util.Log.e("RuFilmTV", "Cannot launch MX Player", e);
+            Toast.makeText(this, "Не удалось открыть MX Player. Оригинальный плеер доступен по кнопке Play.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private boolean launchCapturedMedia() {
@@ -250,7 +336,8 @@ once('''          + "var ok=window.RuFilmPlayer&&window.RuFilmPlayer.openNative(
           + "if(!ok){try{ok=window.RuFilmPlayer&&window.RuFilmPlayer.openCaptured();}catch(e){}}"''', "direct fallback")
 
 once('''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }''', '''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }
-        @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }''', "bridge method")
+        @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }
+        @JavascriptInterface public void offerMxPlayer(long positionMs) { MainActivity.this.offerMxPlayer(positionMs); }''', "bridge method")
 
 
 # Keep the site's season/episode selectors usable. Do not launch on manifest discovery.
@@ -281,6 +368,9 @@ episode_support = r'''
             "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
+            "function installMxOffer(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;setTimeout(function(){if(v.paused)return;try{if(window.RuFilmPlayer&&window.RuFilmPlayer.offerMxPlayer)window.RuFilmPlayer.offerMxPlayer(Math.round((v.currentTime||0)*1000));}catch(e){}},1200);},true);" +
+            "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});}" +
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
             "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
             "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
@@ -291,7 +381,7 @@ episode_support = r'''
             "b.style.display=visible?'flex':'none';if(visible){var x=Math.max(8,Math.min(w-60,r.left+(r.width-52)/2));var y=r.bottom+9;if(y+52>h)y=Math.max(8,r.bottom-60);b.style.left=x+'px';b.style.top=y+'px';}}catch(x){b.style.display='none';}}" +
             "['loadedmetadata','play','pause','timeupdate','durationchange','emptied'].forEach(function(e){v.addEventListener(e,place);});" +
             "window.addEventListener('resize',place);window.addEventListener('scroll',place,true);place();v.__rufilmFsPlace=place;});}" +
-            "installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
+            "installMxOffer();installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
             "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installFullscreenButton();mark();},350);});" +
             "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
