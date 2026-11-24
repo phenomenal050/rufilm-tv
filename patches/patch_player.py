@@ -632,6 +632,7 @@ else:
     s = s[:class_end] + '''
     @Override protected void onPause() {
         applyAudioSyncOffset(0);
+        if (nativePlayerLaunching && web != null) web.onPause();
         super.onPause();
     }
 
