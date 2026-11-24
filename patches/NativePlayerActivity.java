@@ -596,9 +596,11 @@ public class NativePlayerActivity extends Activity {
             : String.format(Locale.ROOT, "%d:%02d", m, sec);
     }
     private void showAssistantMenu() {
-        String[] items = {"Качество видео", "Скрыть панель"};
+        String[] items = {"Качество видео", "Выбрать сезон", "Выбрать серию", "Скрыть панель"};
         new AlertDialog.Builder(this).setItems(items, (d, which) -> {
             if (which == 0) showQualityDialog();
+            else if (which == 1) showEpisodeSelector(0);
+            else if (which == 2) showEpisodeSelector(1);
             else hideAssistantControls();
         }).show();
         showAssistantControls();
