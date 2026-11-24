@@ -193,7 +193,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private void maybeOfferMxPlayer(long positionMs) {
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
-            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 15000L) return;
+            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -257,8 +257,12 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 
     private static class PlayerChoice {
         final String id, label, packageName;
+        final boolean installed;
         PlayerChoice(String id, String label, String packageName) {
-            this.id = id; this.label = label; this.packageName = packageName;
+            this(id, label, packageName, packageName == null);
+        }
+        PlayerChoice(String id, String label, String packageName, boolean installed) {
+            this.id = id; this.label = label; this.packageName = packageName; this.installed = installed;
         }
     }
 
@@ -270,9 +274,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private java.util.ArrayList<PlayerChoice> getAvailablePlayerChoices() {
         java.util.ArrayList<PlayerChoice> choices = new java.util.ArrayList<>();
         choices.add(new PlayerChoice("original", "Оригинальный плеер сайта", null));
-        choices.add(new PlayerChoice("media3", "Встроенный Media3", null));
-        if (playerPackageInstalled("is.xyz.mpv"))
-            choices.add(new PlayerChoice("mpv", "mpv-android", "is.xyz.mpv"));
+        choices.add(new PlayerChoice("media3", "Встроенный плеер (Media3)", null));
+        boolean mpvInstalled = playerPackageInstalled("is.xyz.mpv");
+        choices.add(new PlayerChoice("mpv",
+                mpvInstalled ? "mpv-android" : "mpv-android (не установлен)",
+                "is.xyz.mpv", mpvInstalled));
         if (playerPackageInstalled("org.videolan.vlc"))
             choices.add(new PlayerChoice("vlc", "VLC", "org.videolan.vlc"));
         if (playerPackageInstalled("net.gtvbox.videoplayer"))
@@ -296,17 +302,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         return false;
     }
 
-    // A saved choice is launched directly; without it the viewer gets a player picker.
+    // Always show the picker on every fullscreen entry. A saved default is preselected,
+    // but never bypasses the chooser; the checkbox controls whether it remains the default.
     private void offerMxPlayer(long positionMs) {
-        runOnUiThread(() -> {
-            String defaultId = getSharedPreferences("rufilm_players", MODE_PRIVATE)
-                    .getString("default_player_id", "");
-            if (defaultId != null && !defaultId.isEmpty() && isPlayerChoiceAvailable(defaultId)) {
-                launchSelectedPlayer(defaultId, positionMs);
-                return;
-            }
-            showExternalPlayerChooser(positionMs);
-        });
+        runOnUiThread(() -> showExternalPlayerChooser(positionMs));
     }
 
     private void showExternalPlayerChooser(long positionMs) {
@@ -334,12 +333,20 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                 radio.setText(choice.label);
                 radio.setTextSize(16);
                 radio.setMinHeight((int)(48 * getResources().getDisplayMetrics().density));
+                radio.setEnabled(choice.installed);
                 group.addView(radio);
                 if (choice.id.equals(saved)) selectedId = radio.getId();
                 if (selectedId < 0 && "original".equals(choice.id)) selectedId = radio.getId();
             }
             if (selectedId >= 0) group.check(selectedId);
-            content.addView(group);
+            android.widget.ScrollView playerScroll = new android.widget.ScrollView(this);
+            playerScroll.setFillViewport(false);
+            playerScroll.setVerticalScrollBarEnabled(true);
+            playerScroll.addView(group);
+            int maxPlayerListHeight = Math.min(dp(320),
+                    (int)(getResources().getDisplayMetrics().heightPixels * 0.55f));
+            content.addView(playerScroll, new android.widget.LinearLayout.LayoutParams(
+                    -1, Math.max(dp(144), maxPlayerListHeight)));
             android.widget.CheckBox remember = new android.widget.CheckBox(this);
             remember.setText("Использовать выбранный плеер по умолчанию");
             remember.setTextSize(14);
