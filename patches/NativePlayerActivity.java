@@ -417,6 +417,7 @@ public class NativePlayerActivity extends Activity {
                 Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
                 String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
                 org.json.JSONArray found = new org.json.JSONArray(json);
+                android.util.Log.i("RuFilmTV", "Episode selector retry=" + attempt + " found=" + found.length());
                 if (found.length() > 0) {
                     episodeSelectors = found;
                     updateEpisodeButtonLabels();
@@ -474,6 +475,7 @@ public class NativePlayerActivity extends Activity {
                         String value = options.getJSONObject(choice).optString("value", "");
                         captureBaselineForSelection = MainActivity.getCapturedMediaAt();
                         String optionPath = options.getJSONObject(choice).optString("path", "");
+                        android.util.Log.i("RuFilmTV", "Episode selection framePath=" + framePathJson + " selectorIndex=" + selectIndex + " option=" + labels[choice]);
                         MainActivity.applyEpisodeSelection(framePathJson, selectIndex, optionPath.isEmpty() ? value : optionPath);
                         selector.put("selectedText", labels[choice]);
                         for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
