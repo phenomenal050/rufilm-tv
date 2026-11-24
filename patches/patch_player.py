@@ -255,197 +255,18 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         maybeOfferMxPlayer(0L);
     }
 
-    private static class PlayerChoice {
-        final String id, label, packageName;
-        final boolean installed;
-        PlayerChoice(String id, String label, String packageName) {
-            // Three-argument choices are added only when the external package is installed.
-            // Treat them as enabled; mpv uses the four-argument constructor for its
-            // explicit installed/not-installed placeholder row.
-            this(id, label, packageName, true);
-        }
-        PlayerChoice(String id, String label, String packageName, boolean installed) {
-            this.id = id; this.label = label; this.packageName = packageName; this.installed = installed;
-        }
-    }
-
-    private boolean playerPackageInstalled(String packageName) {
-        try { getPackageManager().getPackageInfo(packageName, 0); return true; }
-        catch (Exception ignored) { return false; }
-    }
-
-    private java.util.ArrayList<PlayerChoice> getAvailablePlayerChoices() {
-        java.util.ArrayList<PlayerChoice> choices = new java.util.ArrayList<>();
-        choices.add(new PlayerChoice("original", "Оригинальный плеер сайта", null));
-        choices.add(new PlayerChoice("media3", "Встроенный плеер (Media3)", null));
-        boolean mpvInstalled = playerPackageInstalled("is.xyz.mpv");
-        choices.add(new PlayerChoice("mpv",
-                mpvInstalled ? "mpv-android" : "mpv-android (не установлен)",
-                "is.xyz.mpv", mpvInstalled));
-        if (playerPackageInstalled("org.videolan.vlc"))
-            choices.add(new PlayerChoice("vlc", "VLC", "org.videolan.vlc"));
-        if (playerPackageInstalled("net.gtvbox.videoplayer"))
-            choices.add(new PlayerChoice("vimu", "Vimu Player", "net.gtvbox.videoplayer"));
-        if (playerPackageInstalled("net.gtvbox.vimuhd"))
-            choices.add(new PlayerChoice("vimu_free", "Vimu Player (бесплатный)", "net.gtvbox.vimuhd"));
-        if (playerPackageInstalled("com.brouken.player"))
-            choices.add(new PlayerChoice("just", "Just Player", "com.brouken.player"));
-        if (playerPackageInstalled("com.mxtech.videoplayer.ad"))
-            choices.add(new PlayerChoice("mx_ad", "MX Player", "com.mxtech.videoplayer.ad"));
-        if (playerPackageInstalled("com.mxtech.videoplayer.pro"))
-            choices.add(new PlayerChoice("mx_pro", "MX Player Pro", "com.mxtech.videoplayer.pro"));
-        if (playerPackageInstalled("org.xbmc.kodi"))
-            choices.add(new PlayerChoice("kodi", "Kodi", "org.xbmc.kodi"));
-        return choices;
-    }
-
-    private boolean isPlayerChoiceAvailable(String id) {
-        if ("original".equals(id) || "media3".equals(id)) return true;
-        for (PlayerChoice choice : getAvailablePlayerChoices())
-            if (choice.id.equals(id)) return choice.installed;
-        return false;
-    }
-
-    // Always show the picker on every fullscreen entry. A saved default is preselected,
-    // but never bypasses the chooser; the checkbox controls whether it remains the default.
+    // Media3 is the only playback engine. Handoff automatically on HTML5 fullscreen.
     private void offerMxPlayer(long positionMs) {
-        runOnUiThread(() -> showExternalPlayerChooser(positionMs));
-    }
-
-    private void showExternalPlayerChooser(long positionMs) {
-        final boolean hasCapturedMedia;
-        synchronized (mediaCaptureLock) {
-            hasCapturedMedia = capturedMediaUrl != null &&
-                    System.currentTimeMillis() - capturedMediaAt <= 90000L;
-        }
         runOnUiThread(() -> {
-            java.util.ArrayList<PlayerChoice> choices = getAvailablePlayerChoices();
-            String saved = getSharedPreferences("rufilm_players", MODE_PRIVATE)
-                    .getString("default_player_id", "");
-            android.widget.LinearLayout content = new android.widget.LinearLayout(this);
-            content.setOrientation(android.widget.LinearLayout.VERTICAL);
-            int pad = (int)(18 * getResources().getDisplayMetrics().density);
-            content.setPadding(pad, pad / 2, pad, pad / 2);
-            android.widget.RadioGroup group = new android.widget.RadioGroup(this);
-            group.setOrientation(android.widget.RadioGroup.VERTICAL);
-            int selectedId = -1;
-            for (int i = 0; i < choices.size(); i++) {
-                PlayerChoice choice = choices.get(i);
-                android.widget.RadioButton radio = new android.widget.RadioButton(this);
-                radio.setId(1000 + i);
-                radio.setTag(choice.id);
-                radio.setText(choice.label);
-                radio.setTextSize(16);
-                radio.setMinHeight((int)(48 * getResources().getDisplayMetrics().density));
-                radio.setEnabled(choice.installed);
-                group.addView(radio);
-                if (choice.id.equals(saved) && choice.installed) selectedId = radio.getId();
-                if (selectedId < 0 && "original".equals(choice.id)) selectedId = radio.getId();
-            }
-            if (selectedId >= 0) group.check(selectedId);
-            android.widget.ScrollView playerScroll = new android.widget.ScrollView(this);
-            playerScroll.setFillViewport(false);
-            playerScroll.setVerticalScrollBarEnabled(true);
-            playerScroll.addView(group);
-            int maxPlayerListHeight = Math.min(dp(320),
-                    (int)(getResources().getDisplayMetrics().heightPixels * 0.55f));
-            content.addView(playerScroll, new android.widget.LinearLayout.LayoutParams(
-                    -1, Math.max(dp(144), maxPlayerListHeight)));
-            android.widget.TextView playerHint = new android.widget.TextView(this);
-            playerHint.setText("mpv-android станет доступен после установки отдельного приложения mpv-android.");
-            playerHint.setTextSize(12);
-            playerHint.setPadding(dp(4), dp(6), dp(4), dp(2));
-            content.addView(playerHint);
-            android.widget.CheckBox remember = new android.widget.CheckBox(this);
-            remember.setText("Использовать выбранный плеер по умолчанию");
-            remember.setTextSize(14);
-            remember.setChecked(saved != null && !saved.isEmpty());
-            content.addView(remember);
-            android.app.AlertDialog dialog = new AlertDialog.Builder(this)
-                    .setTitle("Выберите видеоплеер")
-                    .setView(content)
-                    .setPositiveButton("Продолжить", null)
-                    .setNegativeButton("Отмена", null)
-                    .create();
-            dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                    .setOnClickListener(v -> {
-                        int checked = group.getCheckedRadioButtonId();
-                        android.widget.RadioButton radio = checked < 0 ? null : group.findViewById(checked);
-                        if (radio == null || !(radio.getTag() instanceof String)) {
-                            Toast.makeText(this, "Выберите плеер", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        String id = (String)radio.getTag();
-                        android.content.SharedPreferences.Editor editor =
-                                getSharedPreferences("rufilm_players", MODE_PRIVATE).edit();
-                        if (remember.isChecked()) editor.putString("default_player_id", id);
-                        else editor.remove("default_player_id");
-                        editor.apply();
-                        dialog.dismiss();
-                        if (hasCapturedMedia) launchSelectedPlayer(id, positionMs);
-                        else Toast.makeText(this, remember.isChecked()
-                                ? "Плеер по умолчанию сохранён."
-                                : "Выбор плеера сохранён только для текущего запуска.", Toast.LENGTH_LONG).show();
-                    }));
-            dialog.show();
-        });
-    }
-
-    private void launchSelectedPlayer(String playerId, long positionMs) {
-        if ("original".equals(playerId)) {
-            syncOriginalPlayback(0L, false);
-            return;
-        }
-        final String url;
-        final HashMap<String, String> headers;
-        synchronized (mediaCaptureLock) {
-            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) {
-                Toast.makeText(this, "Ссылка на видео устарела. Нажмите Play ещё раз.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            url = capturedMediaUrl;
-            headers = new HashMap<>(capturedMediaHeaders);
-        }
-        if ("media3".equals(playerId)) {
+            if (nativePlayerLaunching) return;
             playerMode = "native";
             boolean launched = launchCapturedMedia();
             playerMode = "original";
-            if (!launched) Toast.makeText(this, "Media3 пока не удалось запустить. Продолжайте в оригинальном плеере.", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        PlayerChoice selected = null;
-        for (PlayerChoice choice : getAvailablePlayerChoices())
-            if (choice.id.equals(playerId)) { selected = choice; break; }
-        if (selected == null || selected.packageName == null) {
-            Toast.makeText(this, "Выбранный плеер не установлен.", Toast.LENGTH_LONG).show();
-            showExternalPlayerChooser(positionMs);
-            return;
-        }
-        try {
-            String proxyUrl = LocalStreamProxy.start(url, headers);
-            String lower = url.toLowerCase(Locale.ROOT);
-            String mime = lower.contains(".m3u8") ? "application/x-mpegURL" :
-                    (lower.contains(".mpd") ? "application/dash+xml" : "video/*");
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            if ("mx_ad".equals(playerId))
-                intent.setClassName(selected.packageName, "com.mxtech.videoplayer.ad.ActivityScreen");
-            else if ("mx_pro".equals(playerId))
-                intent.setClassName(selected.packageName, "com.mxtech.videoplayer.ActivityScreen");
-            else
-                intent.setPackage(selected.packageName);
-            intent.setDataAndType(Uri.parse(proxyUrl), mime);
-            intent.putExtra("title", "RuFilmTV");
-            intent.putExtra("position", (int)Math.max(0L, Math.min(2147483647L, positionMs)));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (web != null) web.evaluateJavascript(
-                    "(function(){try{document.querySelectorAll('video').forEach(function(v){v.pause();});}catch(e){}})();", null);
-            startActivity(intent);
-        } catch (Exception e) {
-            android.util.Log.e("RuFilmTV", "Cannot launch external player through local bridge", e);
-            Toast.makeText(this, "Не удалось запустить плеер через локальный мост: " +
-                    (e.getMessage() == null ? "ошибка запуска" : e.getMessage()), Toast.LENGTH_LONG).show();
-        }
+            if (!launched) {
+                nativePlayerLaunching = false;
+                Toast.makeText(this, "Не удалось перехватить видео для Media3. Оригинальный плеер оставлен на паузе.", Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private boolean launchCapturedMedia() {
@@ -734,7 +555,7 @@ bridge_fields = '''
         if (a == null || a.web == null) return;
         final long syncPositionMs = positionMs;
         a.runOnUiThread(() -> {
-            String js = "(function(){function collect(w,a,n){if(n>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,n+1);}catch(e){}}catch(e){}}var docs=[];collect(window,docs,0);var t=" + (syncPositionMs > 0L ? syncPositionMs/1000.0 : -1.0) + ";docs.forEach(function(d){try{var w=d.defaultView||window,z=w.__rufilmSavedPlayerLayout,v=(z&&z.video)||w.__rufilmActiveVideo;if(!v)return;if(" + nativeActive + "){w.__rufilmNativeActive=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>2){try{v.currentTime=t;}catch(e){}}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}return;}w.__rufilmNativeActive=false;if(z){z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;}var shouldPlay=z?!z.paused:true,done=false;function finishSeek(){if(done)return;done=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.currentTime=t;}catch(e){}}if(shouldPlay){try{var pp=v.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){}}w.__rufilmSavedPlayerLayout=null;}function seek(){if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.addEventListener('seeked',finishSeek,{once:true});v.currentTime=t;}catch(e){}}setTimeout(finishSeek,500);}if(v.readyState>=1)seek();else{v.addEventListener('loadedmetadata',seek,{once:true});setTimeout(seek,900);}}catch(e){}});return true;})()";
+            String js = "(function(){function collect(w,a,n){if(n>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,n+1);}catch(e){}}catch(e){}}var docs=[];collect(window,docs,0);var t=" + (syncPositionMs > 0L ? syncPositionMs/1000.0 : -1.0) + ";docs.forEach(function(d){try{var w=d.defaultView||window,z=w.__rufilmSavedPlayerLayout,v=(z&&z.video)||w.__rufilmActiveVideo;if(!v)return;if(" + nativeActive + "){w.__rufilmNativeActive=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>2){try{v.currentTime=t;}catch(e){}}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}return;}w.__rufilmNativeActive=false;if(z){z.nodes.forEach(function(x){if(x.style===null)x.el.removeAttribute('style');else x.el.setAttribute('style',x.style);if(x.cls===null)x.el.removeAttribute('class');else x.el.setAttribute('class',x.cls);});v.muted=z.muted;v.volume=z.volume;}var done=false;function finishSeek(){if(done)return;done=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.currentTime=t;}catch(e){}}try{v.pause();}catch(e){}w.__rufilmSavedPlayerLayout=null;}function seek(){if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.addEventListener('seeked',finishSeek,{once:true});v.currentTime=t;}catch(e){}}setTimeout(finishSeek,500);}if(v.readyState>=1)seek();else{v.addEventListener('loadedmetadata',seek,{once:true});setTimeout(seek,900);}}catch(e){}});return true;})()";
             android.util.Log.i("RuFilmTV", "Restore original VK playback at " + syncPositionMs + " ms; nativeActive=" + nativeActive);
             a.web.evaluateJavascript(js, null);
         });
@@ -1433,16 +1254,15 @@ once("    private void showPlayerDialog() {",
     }
 
     private void showAppMenu() {
-        String[] items = {"Чистый", "Цвет", "Фильтры", "Видеоплеер",
+        String[] items = {"Чистый", "Цвет", "Фильтры",
                 "Синхронизация звука", "Проверить обновления", "Обновить списки рекламы"};
         new AlertDialog.Builder(this).setTitle("Ещё").setItems(items, (dialog, which) -> {
             if (which == 0) { if (cleanButton != null) cleanButton.performClick(); }
             else if (which == 1) { if (themeButton != null) themeButton.performClick(); }
             else if (which == 2) showAdFilterDialog();
-            else if (which == 3) showExternalPlayerChooser(0L);
-            else if (which == 4) showAudioSyncDialog();
-            else if (which == 5) AppUpdateManager.check(MainActivity.this);
-            else if (which == 6) updateFilterLists();
+            else if (which == 3) showAudioSyncDialog();
+            else if (which == 4) AppUpdateManager.check(MainActivity.this);
+            else if (which == 5) updateFilterLists();
         }).show();
     }
 
