@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import java.net.HttpURLConnection;
 
 /**
+ * Beta.18: resilient HLS/DASH bridge for external players, including range-aware segment forwarding.
  * Loopback-only authenticated HTTP bridge for external video players.
  * It forwards every HLS/DASH child request with the WebView session headers.
  */
