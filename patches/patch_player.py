@@ -21,6 +21,7 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private String capturedMediaUserAgent = null;
     private Map<String, String> capturedMediaHeaders = new HashMap<>();
     private long capturedMediaAt = 0L;
+    private int capturedMediaPriority = 0; // HLS/DASH manifests outrank individual MP4 fragments.
     private long lastNativePlayerLaunchAt = 0L;
     private boolean nativePlayerLaunching = false;''', "media fields")
 
@@ -157,14 +158,22 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if ((userAgent == null || userAgent.isEmpty()) && web != null) {
             try { userAgent = web.getSettings().getUserAgentString(); } catch (Exception ignored) { }
         }
+        int priority = playlist ? 3 : 1;
         synchronized (mediaCaptureLock) {
-            capturedMediaUrl = url;
-            capturedMediaReferer = (referer == null || referer.isEmpty()) ? BASE + "/" : referer;
-            capturedMediaUserAgent = userAgent;
-            capturedMediaHeaders = safeHeaders;
-            capturedMediaAt = System.currentTimeMillis();
+            long now = System.currentTimeMillis();
+            if (capturedMediaUrl == null || now - capturedMediaAt > 15000L || priority >= capturedMediaPriority) {
+                capturedMediaUrl = url;
+                capturedMediaReferer = (referer == null || referer.isEmpty()) ? BASE + "/" : referer;
+                capturedMediaUserAgent = userAgent;
+                capturedMediaHeaders = safeHeaders;
+                capturedMediaAt = now;
+                capturedMediaPriority = priority;
+                android.util.Log.i("RuFilmTV", "Captured MX candidate priority=" + priority +
+                    " type=" + (playlist ? "playlist" : "file") + " host=" + Uri.parse(url).getHost());
+            } else {
+                android.util.Log.i("RuFilmTV", "Ignored lower-priority media fragment host=" + Uri.parse(url).getHost());
+            }
         }
-        android.util.Log.i("RuFilmTV", "Captured media manifest: " + Uri.parse(url).getHost());
         maybeOfferMxPlayer(0L);
         // Launch only after the site's fullscreen request; keep episode selection available.
     }
@@ -203,12 +212,17 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             String cookie = android.webkit.CookieManager.getInstance().getCookie(rawUrl);
             if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
         } catch (Exception ignored) { }
+        int priority = (lower.contains(".m3u8") || lower.contains(".mpd")) ? 3 : 1;
         synchronized (mediaCaptureLock) {
-            capturedMediaUrl = rawUrl;
-            capturedMediaReferer = referer == null || referer.isEmpty() ? BASE + "/" : referer;
-            capturedMediaUserAgent = userAgent;
-            capturedMediaHeaders = headers;
-            capturedMediaAt = System.currentTimeMillis();
+            long now = System.currentTimeMillis();
+            if (capturedMediaUrl == null || now - capturedMediaAt > 15000L || priority >= capturedMediaPriority) {
+                capturedMediaUrl = rawUrl;
+                capturedMediaReferer = referer == null || referer.isEmpty() ? BASE + "/" : referer;
+                capturedMediaUserAgent = userAgent;
+                capturedMediaHeaders = headers;
+                capturedMediaAt = now;
+                capturedMediaPriority = priority;
+            }
         }
         maybeOfferMxPlayer(0L);
     }
@@ -274,6 +288,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             intent.setDataAndType(android.net.Uri.parse(url), mime);
             intent.putExtra("title", "RuFilmTV");
             intent.putExtra("secure_uri", true);
+            intent.putExtra("return_result", true);
+            intent.putExtra("sticky", false);
             intent.putExtra("position", (int)Math.max(0L, Math.min(2147483647L, positionMs)));
             String[] mxHeaders = new String[headers.size() * 2];
             int index = 0;
