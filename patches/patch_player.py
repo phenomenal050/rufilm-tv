@@ -504,11 +504,11 @@ else:
 
 
 # The vendor HAL request may affect the device audio path, so clear it when app loses foreground.
-pause = re.search(r'((?:public|protected)\\s+void\\s+onPause\\s*\\(\\s*\\)\\s*\\{)', s)
+pause = re.search(r'((?:public|protected)\s+void\s+onPause\s*\(\s*\)\s*\{)', s)
 if pause:
     body_end = pause.end()
     if 'applyAudioSyncOffset(0);' not in s[body_end:body_end + 240]:
-        s = s[:body_end] + '\\n        applyAudioSyncOffset(0);' + s[body_end:]
+        s = s[:body_end] + '\n        applyAudioSyncOffset(0);' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
