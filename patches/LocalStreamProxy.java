@@ -149,8 +149,9 @@ public final class LocalStreamProxy {
                     manifestBytes = readLimited(body, MAX_MANIFEST_BYTES);
                 }
                 String text = new String(manifestBytes, StandardCharsets.UTF_8);
+                String effectiveUrl = upstream.getURL() == null ? target : upstream.getURL().toString();
                 String rewritten = lowerTarget.contains(".mpd") || (type != null && type.toLowerCase(Locale.ROOT).contains("dash+xml"))
-                        ? rewriteDash(text, target) : rewriteHls(text, target);
+                        ? rewriteDash(text, effectiveUrl) : rewriteHls(text, effectiveUrl);
                 manifestBytes = rewritten.getBytes(StandardCharsets.UTF_8);
             }
 
