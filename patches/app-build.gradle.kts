@@ -23,8 +23,8 @@ android {
         applicationId = "tv.rufilm.app"
         minSdk = 23
         targetSdk = 28
-        versionCode = 57
-        versionName = "3.1.1-beta.8"
+        versionCode = 58
+        versionName = "3.1.1-beta.9"
     }
 
     if (hasStableSigning) {
@@ -52,6 +52,7 @@ android {
 dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.core:core:1.15.0")
+    implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
