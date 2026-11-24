@@ -12,7 +12,9 @@ def once(old, new, label):
     s=s.replace(old,new,1)
 
 once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map;\nimport java.util.HashMap;", "Map imports")
-once('    private boolean externalLaunchPending = false;', '''    private boolean externalLaunchPending = false;
+once('    private boolean externalLaunchPending = false;
+    private volatile long mxPlayIntentUntil = 0L;
+    private volatile boolean mxOfferTriggered = false;', '''    private boolean externalLaunchPending = false;
     private final Object mediaCaptureLock = new Object();
     private String capturedMediaUrl = null;
     private String capturedMediaReferer = null;
@@ -163,12 +165,52 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             capturedMediaAt = System.currentTimeMillis();
         }
         android.util.Log.i("RuFilmTV", "Captured media manifest: " + Uri.parse(url).getHost());
+        maybeOfferMxPlayer(0L);
         // Launch only after the site's fullscreen request; keep episode selection available.
     }
 
     private boolean isMxPackageInstalled(String packageName) {
         try { getPackageManager().getPackageInfo(packageName, 0); return true; }
         catch (Exception ignored) { return false; }
+    }
+
+    // Arm a short capture window after a deliberate Play/fullscreen gesture.
+    private void armMxPlayIntent() {
+        mxPlayIntentUntil = System.currentTimeMillis() + 15000L;
+        mxOfferTriggered = false;
+        maybeOfferMxPlayer(0L);
+    }
+
+    private void maybeOfferMxPlayer(long positionMs) {
+        if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
+        synchronized (mediaCaptureLock) {
+            if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 15000L) return;
+        }
+        mxOfferTriggered = true;
+        offerMxPlayer(positionMs);
+    }
+
+    private void captureMxMedia(String rawUrl, String referer, String userAgent) {
+        if (rawUrl == null || !(rawUrl.startsWith("https://") || rawUrl.startsWith("http://"))) return;
+        String lower = rawUrl.toLowerCase(Locale.ROOT);
+        if (!(lower.contains(".m3u8") || lower.contains(".mpd") || lower.contains(".mp4") ||
+                lower.contains(".m4v") || lower.contains(".webm"))) return;
+        if (isAdRequest(rawUrl) && !isRuFilmMediaRequest(rawUrl)) return;
+        HashMap<String, String> headers = new HashMap<>();
+        if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);
+        if (userAgent != null && !userAgent.isEmpty()) headers.put("User-Agent", userAgent);
+        try {
+            String cookie = android.webkit.CookieManager.getInstance().getCookie(rawUrl);
+            if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
+        } catch (Exception ignored) { }
+        synchronized (mediaCaptureLock) {
+            capturedMediaUrl = rawUrl;
+            capturedMediaReferer = referer == null || referer.isEmpty() ? BASE + "/" : referer;
+            capturedMediaUserAgent = userAgent;
+            capturedMediaHeaders = headers;
+            capturedMediaAt = System.currentTimeMillis();
+        }
+        maybeOfferMxPlayer(0L);
     }
 
     private void offerMxPlayer(long positionMs) {
@@ -337,7 +379,11 @@ once('''          + "var ok=window.RuFilmPlayer&&window.RuFilmPlayer.openNative(
 
 once('''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }''', '''        @JavascriptInterface public boolean isNativeEnabled() { return "native".equals(playerMode); }
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }
-        @JavascriptInterface public void offerMxPlayer(long positionMs) { MainActivity.this.offerMxPlayer(positionMs); }''', "bridge method")
+        @JavascriptInterface public void offerMxPlayer(long positionMs) { MainActivity.this.offerMxPlayer(positionMs); }
+        @JavascriptInterface public void armMxPlayIntent() { MainActivity.this.armMxPlayIntent(); }
+        @JavascriptInterface public void captureMxMedia(String url, String referer, String userAgent) {
+            MainActivity.this.captureMxMedia(url, referer, userAgent);
+        }''', "bridge method")
 
 
 # Keep the site's season/episode selectors usable. Do not launch on manifest discovery.
@@ -368,9 +414,9 @@ episode_support = r'''
             "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
-            "function installMxOffer(){var docs=[];function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
+            "function installMxOffer(){var docs=[];try{document.addEventListener('click',function(e){var f=e.target&&e.target.closest?e.target.closest('iframe'):null;if(f&&/vk|alloha|stravers/i.test(f.src||'')){try{var z=window.RuFilmPlayer;if(z&&z.armMxPlayIntent)z.armMxPlayIntent();}catch(q){}}},true);}catch(q){}function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
             "function bindDoc(d){try{var w=d.defaultView||window;[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
-            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;setTimeout(function(){if(v.paused)return;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b&&b.offerMxPlayer)b.offerMxPlayer(Math.round((v.currentTime||0)*1000));}catch(e){}},1200);},true);" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.armMxPlayIntent)b.armMxPlayIntent();if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
             "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
             "collect(window,0);docs.forEach(bindDoc);}" +
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
@@ -1038,7 +1084,8 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3."""
+                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.
+                MainActivity.this.armMxPlayIntent();"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
