@@ -298,13 +298,15 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 
     // A saved choice is launched directly; without it the viewer gets a player picker.
     private void offerMxPlayer(long positionMs) {
-        String defaultId = getSharedPreferences("rufilm_players", MODE_PRIVATE)
-                .getString("default_player_id", "");
-        if (defaultId != null && !defaultId.isEmpty() && isPlayerChoiceAvailable(defaultId)) {
-            launchSelectedPlayer(defaultId, positionMs);
-            return;
-        }
-        showExternalPlayerChooser(positionMs);
+        runOnUiThread(() -> {
+            String defaultId = getSharedPreferences("rufilm_players", MODE_PRIVATE)
+                    .getString("default_player_id", "");
+            if (defaultId != null && !defaultId.isEmpty() && isPlayerChoiceAvailable(defaultId)) {
+                launchSelectedPlayer(defaultId, positionMs);
+                return;
+            }
+            showExternalPlayerChooser(positionMs);
+        });
     }
 
     private void showExternalPlayerChooser(long positionMs) {
