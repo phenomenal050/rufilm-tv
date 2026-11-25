@@ -51,8 +51,6 @@ public class NativePlayerActivity extends Activity {
     private PlayerView playerView;
     private DefaultTrackSelector trackSelector;
     private Button qualityButton;
-    private Button seasonButton;
-    private Button episodeButton;
     private Button volumeButton;
     private android.widget.SeekBar volumeSeekBar;
     private float volumeBeforeMute = 1.0f;
@@ -80,7 +78,6 @@ public class NativePlayerActivity extends Activity {
         }
     };
 
-    private org.json.JSONArray episodeSelectors = new org.json.JSONArray();
     private String currentMediaUrl;
     private String currentReferer;
     private String currentUserAgent;
@@ -202,28 +199,6 @@ public class NativePlayerActivity extends Activity {
         title.setTextSize(16);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
-        seasonButton = new Button(this);
-        seasonButton.setText("Сезон");
-        seasonButton.setTextSize(12);
-        seasonButton.setTextColor(android.graphics.Color.WHITE);
-        seasonButton.setAllCaps(false);
-        seasonButton.setMinWidth(0);
-        seasonButton.setPadding(dp(6), 0, dp(6), 0);
-        seasonButton.setBackgroundColor(0x66333333);
-        seasonButton.setOnClickListener(v -> showEpisodeSelector(0));
-        top.addView(seasonButton, new android.widget.LinearLayout.LayoutParams(dp(88), dp(42)));
-        episodeButton = new Button(this);
-        episodeButton.setText("Серия");
-        episodeButton.setTextSize(12);
-        episodeButton.setTextColor(android.graphics.Color.WHITE);
-        episodeButton.setAllCaps(false);
-        episodeButton.setMinWidth(0);
-        episodeButton.setPadding(dp(6), 0, dp(6), 0);
-        episodeButton.setBackgroundColor(0x66333333);
-        episodeButton.setOnClickListener(v -> showEpisodeSelector(1));
-        android.widget.LinearLayout.LayoutParams episodeParams = new android.widget.LinearLayout.LayoutParams(dp(88), dp(42));
-        episodeParams.leftMargin = dp(5);
-        top.addView(episodeButton, episodeParams);
         android.widget.TextView exitFullscreen = controlText("Выход", 14);
         exitFullscreen.setContentDescription("Выйти из полноэкранного режима");
         top.addView(exitFullscreen, new android.widget.LinearLayout.LayoutParams(dp(76), dp(46)));
@@ -311,24 +286,18 @@ public class NativePlayerActivity extends Activity {
         });
 
         overlay.setOnClickListener(v -> {
-            if (controlsLocked) return;
-            if (controlsVisible) hideAssistantControls(); else showAssistantControls();
+            if (!controlsVisible) showAssistantControls();
+            else scheduleAssistantHide();
         });
         root.setOnClickListener(v -> {
-            if (controlsLocked) return;
-            if (controlsVisible) hideAssistantControls(); else showAssistantControls();
+            if (!controlsVisible) showAssistantControls();
+            else scheduleAssistantHide();
         });
 
-        // Season and episode buttons are visible in the top bar; quality remains in the menu.
+        // Episode selection is intentionally left to the source website.
         qualityButton = new Button(this);
-        try {
-            String selectors = getIntent().getStringExtra(EXTRA_EPISODE_SELECTORS);
-            if (selectors != null) episodeSelectors = new org.json.JSONArray(selectors);
-        } catch (Exception ignored) { }
-        updateEpisodeButtonLabels();
         setContentView(root);
         showAssistantControls();
-        refreshEpisodeSelectorsSilently(0);
 
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
@@ -388,105 +357,6 @@ public class NativePlayerActivity extends Activity {
         scheduleAssistantHide();
     }
 
-    private void updateEpisodeButtonLabels() {
-        try {
-            if (episodeSelectors.length() < 2) { seasonButton.setText("Сезон ▾"); episodeButton.setText("Серия ▾"); seasonButton.setEnabled(true); episodeButton.setEnabled(true); return; }
-            org.json.JSONObject season = episodeSelectors.getJSONObject(0);
-            org.json.JSONObject episode = episodeSelectors.getJSONObject(1);
-            seasonButton.setText("Сезон: " + season.optString("selectedText", "—") + " ▾");
-            episodeButton.setText("Серия: " + episode.optString("selectedText", "—") + " ▾");
-            seasonButton.setEnabled(season.optJSONArray("options") != null && season.optJSONArray("options").length() > 0);
-            episodeButton.setEnabled(episode.optJSONArray("options") != null && episode.optJSONArray("options").length() > 0);
-        } catch (Exception ignored) { }
-    }
-    private void showEpisodeSelector(int which) {
-        if (episodeSelectors.length() <= which || episodeSelectors.optJSONObject(which) == null ||
-                episodeSelectors.optJSONObject(which).optJSONArray("options") == null ||
-                episodeSelectors.optJSONObject(which).optJSONArray("options").length() == 0) {
-            refreshEpisodeSelectorsWithRetry(which, 0);
-            return;
-        }
-        showEpisodeSelectorNow(which);
-    }
-
-    // The embedded player can create its season/episode menus asynchronously.
-    // Retry briefly instead of treating an early empty DOM snapshot as "no episodes".
-    private void refreshEpisodeSelectorsWithRetry(int which, int attempt) {
-        MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
-            try {
-                Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
-                String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
-                org.json.JSONArray found = new org.json.JSONArray(json);
-                android.util.Log.i("RuFilmTV", "Episode selector retry=" + attempt + " found=" + found.length());
-                if (found.length() > 0) {
-                    episodeSelectors = found;
-                    updateEpisodeButtonLabels();
-                    showEpisodeSelectorNow(which);
-                    return;
-                }
-            } catch (Exception ignored) { }
-            if (attempt < 24) {
-                syncHandler.postDelayed(() -> refreshEpisodeSelectorsWithRetry(which, attempt + 1), 1000L);
-            } else {
-                Toast.makeText(this, "Сайт не передал список сезонов/серий. Убедитесь, что плеер загрузился.", Toast.LENGTH_LONG).show();
-            }
-        }));
-    }
-
-    private void refreshEpisodeSelectorsSilently(int attempt) {
-        MainActivity.refreshEpisodeSelectors(raw -> runOnUiThread(() -> {
-            try {
-                Object decoded = new org.json.JSONTokener(raw == null ? "\"[]\"" : raw).nextValue();
-                String json = decoded instanceof String ? (String)decoded : String.valueOf(decoded);
-                org.json.JSONArray found = new org.json.JSONArray(json);
-                if (found.length() > 0) {
-                    episodeSelectors = found;
-                    updateEpisodeButtonLabels();
-                    return;
-                }
-            } catch (Exception ignored) { }
-            if (attempt < 12) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(attempt + 1), 1000L);
-        }));
-    }
-
-    private void showEpisodeSelectorNow(int which) {
-        try {
-            if (episodeSelectors.length() <= which) {
-                Toast.makeText(this, "На этой странице нет списка " + (which == 0 ? "сезонов" : "серий"), Toast.LENGTH_SHORT).show();
-                return;
-            }
-            org.json.JSONObject selector = episodeSelectors.getJSONObject(which);
-            org.json.JSONArray options = selector.optJSONArray("options");
-            if (options == null || options.length() == 0) return;
-            String[] labels = new String[options.length()];
-            int selected = 0;
-            for (int i = 0; i < options.length(); i++) {
-                org.json.JSONObject option = options.getJSONObject(i);
-                labels[i] = option.optString("text", option.optString("value", ""));
-                if (option.optBoolean("selected", false)) selected = i;
-            }
-            final int selectIndex = selector.optInt("index", which);
-            org.json.JSONArray framePath = selector.optJSONArray("framePath");
-            if (framePath == null) { framePath = new org.json.JSONArray(); int legacyFrame = selector.optInt("frameIndex", -1); if (legacyFrame >= 0) framePath.put(legacyFrame); }
-            final String framePathJson = framePath.toString();
-            new AlertDialog.Builder(this).setTitle(which == 0 ? "Выбор сезона" : "Выбор серии")
-                .setSingleChoiceItems(labels, selected, (dialog, choice) -> {
-                    try {
-                        String value = options.getJSONObject(choice).optString("value", "");
-                        captureBaselineForSelection = MainActivity.getCapturedMediaAt();
-                        String optionPath = options.getJSONObject(choice).optString("path", "");
-                        android.util.Log.i("RuFilmTV", "Episode selection framePath=" + framePathJson + " selectorIndex=" + selectIndex + " option=" + labels[choice]);
-                        MainActivity.applyEpisodeSelection(framePathJson, selectIndex, optionPath.isEmpty() ? value : optionPath);
-                        selector.put("selectedText", labels[choice]);
-                        for (int i = 0; i < options.length(); i++) options.getJSONObject(i).put("selected", i == choice);
-                        updateEpisodeButtonLabels();
-                        if (which == 0) syncHandler.postDelayed(() -> refreshEpisodeSelectorsSilently(0), 900L);
-                        syncEpisodeStreamAfterSelection();
-                    } catch (Exception ignored) { }
-                    dialog.dismiss();
-                }).setNegativeButton("Закрыть", null).show();
-        } catch (Exception e) { Toast.makeText(this, "Не удалось открыть список", Toast.LENGTH_SHORT).show(); }
-    }
     private void syncEpisodeStreamAfterSelection() {
         syncHandler.postDelayed(() -> trySyncEpisodeStream(0), 700L);
     }
@@ -622,11 +492,9 @@ public class NativePlayerActivity extends Activity {
             : String.format(Locale.ROOT, "%d:%02d", m, sec);
     }
     private void showAssistantMenu() {
-        String[] items = {"Качество видео", "Выбрать сезон", "Выбрать серию", "Скрыть панель"};
+        String[] items = {"Качество видео", "Скрыть панель"};
         new AlertDialog.Builder(this).setItems(items, (d, which) -> {
             if (which == 0) showQualityDialog();
-            else if (which == 1) showEpisodeSelector(0);
-            else if (which == 2) showEpisodeSelector(1);
             else hideAssistantControls();
         }).show();
         showAssistantControls();
@@ -639,17 +507,17 @@ public class NativePlayerActivity extends Activity {
         scheduleAssistantHide();
     }
     private void hideAssistantControls() {
-        if (assistantControls == null || controlsLocked) return;
+        if (assistantControls == null) return;
         controlsVisible = false;
         assistantControls.setVisibility(View.GONE);
-        // Keep season/episode selectors available on Android TV even when transport controls hide.
+        if (assistantTopBar != null) assistantTopBar.setVisibility(View.GONE);
     }
     private void scheduleAssistantHide() {
         assistantHandler.removeCallbacks(hideAssistantRunnable);
         assistantHandler.postDelayed(hideAssistantRunnable, 5000L);
     }
     private final Runnable hideAssistantRunnable = () -> {
-        if (!controlsLocked && player != null) hideAssistantControls();
+        if (player != null) hideAssistantControls();
     };
 
     @Override public void onUserInteraction() {
