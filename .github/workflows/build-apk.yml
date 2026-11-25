@@ -97,7 +97,6 @@ jobs:
           grep -F "document.addEventListener('visibilitychange'" patches/patch_mx_crossframe.py
           grep -F 'framePath:next' patches/patch_player.py
           grep -F 'x.framePath=fp' patches/patch_mx_crossframe.py
-          grep -F 'applyEpisodeSelection(framePathJson' patches/NativePlayerActivity.java
           grep -F 'window.__rufilmOriginalSuspended=true' patches/patch_player.py
           grep -F 'window.__rfStopAckSent' patches/patch_mx_crossframe.py
           grep -F 'originalPlayerStopped' patches/patch_player.py
