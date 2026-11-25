@@ -56,9 +56,8 @@ public class NativePlayerActivity extends Activity {
     private float volumeBeforeMute = 1.0f;
     private android.widget.SeekBar timelineSeek;
     private android.widget.TextView currentTimeText, durationTimeText, playPauseButton;
-    private android.widget.TextView lockButton, displayButton;
+    private android.widget.TextView displayButton;
     private android.widget.LinearLayout assistantControls, assistantTopBar;
-    private boolean controlsLocked = false;
     private boolean controlsVisible = true;
     private boolean zoomMode = false;
     private final android.os.Handler assistantHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -249,16 +248,6 @@ public class NativePlayerActivity extends Activity {
 
         android.widget.FrameLayout controlRow = new android.widget.FrameLayout(this);
         assistantControls.addView(controlRow, new android.widget.LinearLayout.LayoutParams(-1, dp(62)));
-        android.widget.TextView lock = controlText("▣", 22);
-        lockButton = lock;
-        android.widget.FrameLayout.LayoutParams lockParams = new android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        controlRow.addView(lock, lockParams);
-        lock.setOnClickListener(v -> {
-            controlsLocked = !controlsLocked;
-            lockButton.setText(controlsLocked ? "▣" : "♙");
-            showAssistantControls();
-        });
-
         android.widget.LinearLayout transport = new android.widget.LinearLayout(this);
         transport.setGravity(Gravity.CENTER);
         android.widget.FrameLayout.LayoutParams transportParams = new android.widget.FrameLayout.LayoutParams(-2, -1, Gravity.CENTER);
