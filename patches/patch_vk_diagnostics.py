@@ -208,75 +208,53 @@ anchor = '    // VK WebView diagnostics. Never log query strings, cookies, auth 
 if 'private void logVkPointerEvent(' not in source:
     replace_once(anchor, mouse_helpers + '\n' + anchor, 'mouse diagnostic helper')
 
-old_touch = '''        web.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.requestFocus();
-                v.requestFocusFromTouch();
-            }
-            return false;
-        });'''
-new_touch = '''        web.setOnTouchListener((v, event) -> {
+# Attach the WebView listener immediately after WebView creation/configuration.
+# Older project snapshots do not install a touch listener at all, so do not
+# require a pre-existing listener anchor.
+if 'logVkPointerEvent("WEBVIEW_TOUCH"' not in source:
+    web_anchor = '        android.webkit.CookieManager.getInstance().setAcceptCookie(true);'
+    web_listener = '''        web.setOnTouchListener((v, event) -> {
             logVkPointerEvent("WEBVIEW_TOUCH", event, v);
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.requestFocus();
                 v.requestFocusFromTouch();
             }
             return false;
-        });'''
-if old_touch in source:
-    replace_once(old_touch, new_touch, 'WebView touch event logging')
-elif 'logVkPointerEvent("WEBVIEW_TOUCH"' not in source:
-    raise SystemExit('Required WebView touch listener anchor not found for mouse diagnostics')
+        });
+'''
+    replace_once(web_anchor, web_listener + web_anchor, "WebView initialization for mouse diagnostics")
 
-old_dispatch_touch = '''    @Override public boolean dispatchTouchEvent(MotionEvent event) {
-        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
-            showFullscreenUi();
-        return super.dispatchTouchEvent(event);
-    }'''
-new_dispatch_touch = '''    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+def add_dispatch_log(method_name, log_line):
+    global source
+    if log_line in source:
+        return
+    pattern = re.compile(r'(    @Override\s+public boolean\s+' + method_name + r'\s*\([^)]*\)\s*\{)')
+    match = pattern.search(source)
+    if match:
+        source = source[:match.end()] + '\n        ' + log_line + source[match.end():]
+        return
+    # Older base projects have no dispatch override; add one before onBackPressed.
+    anchor = '    @Override public void onBackPressed()'
+    if anchor not in source:
+        raise SystemExit("Required Activity insertion point not found for " + method_name)
+    if method_name == "dispatchTouchEvent":
+        body = '''    @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
         logVkPointerEvent("ACTIVITY_TOUCH", event, web);
-        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
-            showFullscreenUi();
         return super.dispatchTouchEvent(event);
-    }'''
-if old_dispatch_touch in source:
-    replace_once(old_dispatch_touch, new_dispatch_touch, 'Activity touch event logging')
-elif 'logVkPointerEvent("ACTIVITY_TOUCH"' not in source:
-    raise SystemExit('Required dispatchTouchEvent anchor not found for mouse diagnostics')
+    }
 
-old_dispatch_generic = '''    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        boolean handled = super.dispatchGenericMotionEvent(event);
-        if (customView != null && event != null) {
-            int action = event.getAction();
-            if (action == MotionEvent.ACTION_HOVER_ENTER ||
-                    action == MotionEvent.ACTION_HOVER_MOVE ||
-                    action == MotionEvent.ACTION_SCROLL) {
-                revealSystemCursor();
-                setSystemCursorVisible(true);
-                showFullscreenUi();
-            }
-        }
-        return handled;
-    }'''
-new_dispatch_generic = '''    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+'''
+    else:
+        body = '''    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
         logVkPointerEvent("ACTIVITY_GENERIC", event, web);
-        boolean handled = super.dispatchGenericMotionEvent(event);
-        if (customView != null && event != null) {
-            int action = event.getAction();
-            if (action == MotionEvent.ACTION_HOVER_ENTER ||
-                    action == MotionEvent.ACTION_HOVER_MOVE ||
-                    action == MotionEvent.ACTION_SCROLL) {
-                revealSystemCursor();
-                setSystemCursorVisible(true);
-                showFullscreenUi();
-            }
-        }
-        return handled;
-    }'''
-if old_dispatch_generic in source:
-    replace_once(old_dispatch_generic, new_dispatch_generic, 'Activity generic pointer event logging')
-elif 'logVkPointerEvent("ACTIVITY_GENERIC"' not in source:
-    raise SystemExit('Required dispatchGenericMotionEvent anchor not found for mouse diagnostics')
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+'''
+    source = source.replace(anchor, body + anchor, 1)
+
+add_dispatch_log("dispatchTouchEvent", 'logVkPointerEvent("ACTIVITY_TOUCH", event, web);')
+add_dispatch_log("dispatchGenericMotionEvent", 'logVkPointerEvent("ACTIVITY_GENERIC", event, web);')
 
 path.write_text(source, encoding="utf-8")
 print("Added privacy-safe VK diagnostics to", path)
