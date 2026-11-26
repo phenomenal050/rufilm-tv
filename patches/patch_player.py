@@ -394,9 +394,9 @@ episode_support = r'''
             "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
-            "function installMxOffer(){var docs=[];try{document.addEventListener('click',function(e){var f=e.target&&e.target.closest?e.target.closest('iframe'):null;if(f&&/vk|alloha|stravers/i.test(f.src||'')){try{var z=window.RuFilmPlayer;if(z&&z.armMxPlayIntent)z.armMxPlayIntent();}catch(q){}}},true);}catch(q){}function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
+            "function installMxOffer(){var docs=[];function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
             "function bindDoc(d){try{var w=d.defaultView||window;[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
-            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.armMxPlayIntent)b.armMxPlayIntent();if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
             "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
             "collect(window,0);docs.forEach(bindDoc);}" +
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
@@ -593,34 +593,20 @@ if web_ctor and 'rufilmPlayerGesture' not in s:
         final android.view.GestureDetector rufilmPlayerGesture = new android.view.GestureDetector(this,
             new android.view.GestureDetector.SimpleOnGestureListener() {
                 @Override public boolean onDoubleTap(MotionEvent event) {
-                    rufilmPlayerFullscreen[0] = !rufilmPlayerFullscreen[0];
-                    if (rufilmPlayerFullscreen[0]) {
-                        getWindow().getDecorView().setSystemUiVisibility(
-                            View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
-                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-                    } else {
-                        getWindow().getDecorView().setSystemUiVisibility(rufilmNormalSystemUi);
-                    }
-                    final int px = Math.round(event.getX());
-                    final int py = Math.round(event.getY());
-                    final boolean enter = rufilmPlayerFullscreen[0];
-                    String js = "(function(){var k='__rufilmDblFsTarget',old='__rufilmDblFsOldStyle';" +
-                        "if(!" + enter + "){var p=window[k];if(p){if(p.hasAttribute(old)){p.setAttribute('style',p.getAttribute(old));p.removeAttribute(old);}else p.removeAttribute('style');}" +
-                        "window[k]=null;if(window.__rufilmDblFsOldOverflow!==undefined){document.documentElement.style.overflow=window.__rufilmDblFsOldOverflow;delete window.__rufilmDblFsOldOverflow;}return;}" +
-                        "window.__rufilmDblFsOldOverflow=document.documentElement.style.overflow;var e=document.elementFromPoint(" + px + "," + py + ");" +
-                        "while(e&&e!==document.body&&!(/^(VIDEO|IFRAME)$/.test(e.tagName)))e=e.parentElement;" +
-                        "if(!e||e===document.body){var a=document.querySelectorAll('video,iframe');for(var i=a.length-1;i>=0;i--){var r=a[i].getBoundingClientRect();if(r.width>80&&r.height>45){e=a[i];break;}}}" +
-                        "if(!e)return;if(window[k]&&window[k]!==e){var q=window[k];if(q.hasAttribute(old))q.setAttribute('style',q.getAttribute(old));else q.removeAttribute('style');}" +
-                        "window[k]=e;e.setAttribute(old,e.getAttribute('style')||'');" +
-                        "e.style.setProperty('position','fixed','important');e.style.setProperty('left','0','important');e.style.setProperty('top','0','important');" +
-                        "e.style.setProperty('width','100vw','important');e.style.setProperty('height','100vh','important');" +
-                        "e.style.setProperty('max-width','none','important');e.style.setProperty('max-height','none','important');" +
-                        "e.style.setProperty('margin','0','important');e.style.setProperty('z-index','2147483647','important');" +
-                        "e.style.setProperty('background','#000','important');e.style.setProperty('object-fit','contain','important');" +
-                        "document.documentElement.style.setProperty('overflow','hidden','important');" +
-                        "})()";
-                    web.evaluateJavascript(js, null);
+                    final float density = getResources().getDisplayMetrics().density;
+                    final float pageScale = Math.max(0.1f, web.getScale());
+                    final int px = Math.round(event.getX() / density / pageScale);
+                    final int py = Math.round(event.getY() / density / pageScale);
+                    String js = "(function(){try{" +
+                        "var e=document.elementFromPoint(" + px + "," + py + "),n=e,hit=false;" +
+                        "for(var i=0;n&&i<8;i++,n=n.parentElement){" +
+                        "if(n.tagName==='VIDEO'||n.tagName==='IFRAME'){hit=true;break;}" +
+                        "if(n.querySelector){var r=n.getBoundingClientRect();if(r.width>100&&r.height>60&&n.querySelector('video,iframe')){hit=true;break;}}}" +
+                        "if(!hit)return false;var bridge=window.RuFilmPlayer;" +
+                        "if(bridge&&bridge.armMxPlayIntent){bridge.armMxPlayIntent();return true;}return false;" +
+                        "}catch(x){return false;}})()";
+                    web.evaluateJavascript(js, value ->
+                        android.util.Log.i("RuFilmTV", "Double-click Media3 handoff accepted=" + value));
                     return true;
                 }
                 @Override public boolean onSingleTapConfirmed(MotionEvent event) { return false; }
@@ -1111,8 +1097,7 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.
-                MainActivity.this.armMxPlayIntent();"""
+                // Keep website fullscreen separate; Media3 launches only on player double-click."""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
