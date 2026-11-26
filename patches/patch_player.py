@@ -584,7 +584,7 @@ if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
 
 # Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
-if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
+if web_ctor and 'rufilmPlayerGesture' not in s:
     setup = '''
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
