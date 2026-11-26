@@ -23,8 +23,8 @@ android {
         applicationId = "tv.rufilm.app"
         minSdk = 23
         targetSdk = 28
-        versionCode = 84
-        versionName = "3.1.1-beta.35"
+        versionCode = 85
+        versionName = "3.1.1-beta.36"
     }
 
     if (hasStableSigning) {
