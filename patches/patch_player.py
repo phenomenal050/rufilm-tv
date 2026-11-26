@@ -1042,6 +1042,18 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
+                // Hand off HTML5 fullscreen requests from VK/OK and other embedded players to Media3.
+                boolean freshMediaCandidate;
+                synchronized (mediaCaptureLock) {
+                    freshMediaCandidate = capturedMediaUrl != null &&
+                        System.currentTimeMillis() - capturedMediaAt <= 15000L;
+                }
+                if (freshMediaCandidate) {
+                    startMedia3FromFullscreenButton();
+                    callback.onCustomViewHidden();
+                    android.util.Log.i("RuFilmTV", "HTML5 fullscreen intercepted: handing off to Media3");
+                    return;
+                }
                 // Preserve native Chromium/VK controls while explicitly restoring Android TV focus.
                 view.setFocusable(true);
                 view.setFocusableInTouchMode(true);
