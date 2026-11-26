@@ -595,6 +595,11 @@ if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
 '''
     s = s[:web_ctor.end()] + setup + s[web_ctor.end():]
 
+# Explicit focus for Android TV DPAD and pointer input on the original WebView.
+once('''        web=new WebView(this);web.setBackgroundColor(bg);''', '''        web=new WebView(this);web.setBackgroundColor(bg);
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);''', "WebView TV focus");
+
 # Release the launch guard when returning from NativePlayerActivity.
 # MainActivity receives onResume after the native player is closed.
 resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s)
@@ -1037,7 +1042,17 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Keep VK's own fullscreen controls and gesture handling untouched."""
+                // Preserve native Chromium/VK controls while explicitly restoring Android TV focus.
+                view.setFocusable(true);
+                view.setFocusableInTouchMode(true);
+                view.requestFocus();
+                view.setOnTouchListener((target, event) -> {
+                    if (event != null && event.getAction() == MotionEvent.ACTION_DOWN) {
+                        target.requestFocus();
+                        target.requestFocusFromTouch();
+                    }
+                    return false;
+                });"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
