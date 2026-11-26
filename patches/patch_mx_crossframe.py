@@ -67,7 +67,7 @@ java = r"""
             }
 
             String js =
-                "(function(){try{if(window.__rufilmCrossFrameHook)return;window.__rufilmCrossFrameHook=true;" +
+                "(function(){try{if(window.__rufilmCrossFrameHook)return;var h=String(location.hostname||'').toLowerCase();if(/(^|\\.)(vk\\.com|vk\\.ru|vkvideo\\.ru|userapi\\.com|vkuser\\.net|vk-cdn\\.net|vkuseraudio\\.net|mycdn\\.me)$/.test(h))return;window.__rufilmCrossFrameHook=true;" +
                 "function send(u,k){try{if(!u||!(u.indexOf('https://')===0||u.indexOf('http://')===0))return;" +
                 "var x=u.toLowerCase(),ok=false;['.m3u8','.mpd','.mp4','.m4v','.webm'].forEach(function(e){" +
                 "var p=x.indexOf(e);if(p>=0&&(p+e.length===x.length||['?','&','#'].indexOf(x.charAt(p+e.length))>=0))ok=true;});" +
