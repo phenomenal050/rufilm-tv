@@ -28,14 +28,30 @@ once(
     '        Button search=button("⌕",true);search.setTextSize(20);search.setOnClickListener(v->searchDialog());',
     '        videoFullscreenButton=button("⛶",true);videoFullscreenButton.setTextSize(20);\n'
     '        videoFullscreenButton.setContentDescription("Открыть видео на весь экран");\n'
-    '        videoFullscreenButton.setOnClickListener(v->enterVideoFullscreenMode());\n'
+    '        videoFullscreenButton.setOnClickListener(v->startMedia3FromFullscreenButton());\n'
     '        LinearLayout.LayoutParams vfp=new LinearLayout.LayoutParams(dp(48),dp(42));vfp.leftMargin=dp(6);header.addView(videoFullscreenButton,vfp);\n'
     '        Button search=button("⌕",true);search.setTextSize(20);search.setOnClickListener(v->searchDialog());',
     "fullscreen header button")
 once("        root.addView(header);", "        appHeader=header;\n        root.addView(header);", "save header")
 once("        root.addView(bar);", "        appTitleBar=bar;\n        root.addView(bar);", "save title bar")
 
-methods = r'''    // App-level fullscreen fallback: expands the embedded VK/OK iframe itself,
+methods = r'''    // Launch the existing Media3 player from the dedicated fullscreen button.
+    // The existing capture pipeline supplies the current manifest URL and request headers.
+    private void startMedia3FromFullscreenButton() {
+        if (nativePlayerLaunching) return;
+        mxOfferTriggered = false;
+        armMxPlayIntent();
+        web.postDelayed(() -> {
+            if (!isFinishing() && !nativePlayerLaunching && !mxOfferTriggered) {
+                Toast.makeText(this,
+                    "Не удалось получить видеопоток для Media3. Оставлен исходный плеер.",
+                    Toast.LENGTH_LONG).show();
+                android.util.Log.w("RuFilmTV", "Media3 button: no fresh captured media candidate");
+            }
+        }, 1800L);
+    }
+
+    // App-level fullscreen fallback: expands the embedded VK/OK iframe itself,
     // without relying on the broken native controls inside the cross-origin player.
     private void enterVideoFullscreenMode() {
         if (web == null || videoFullscreenMode || customView != null) return;

@@ -94,8 +94,8 @@ jobs:
           grep -F 'logVkPointerEvent("WEBVIEW_TOUCH"' "$SRC"
           grep -F 'WebView.setWebContentsDebuggingEnabled(true)' "$SRC"
           grep -F 'videoFullscreenButton=button("⛶",true)' "$SRC"
-          grep -F 'enterVideoFullscreenMode()' "$SRC"
-          grep -F 'exitVideoFullscreenMode()' "$SRC"
+          grep -F 'startMedia3FromFullscreenButton()' "$SRC"
+          grep -F 'armMxPlayIntent();' "$SRC"
           grep -F 'new FrameLayout.LayoutParams(dp(104), dp(58), Gravity.TOP | Gravity.END)' "$SRC"
           if grep -F 'fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1))' "$SRC"; then echo "Fullscreen overlay must not cover VK controls"; exit 1; fi
           if grep -F 'MainActivity.this.installVkFrameSupport();' "$SRC"; then echo "VK frame click retry hook must stay disabled"; exit 1; fi
