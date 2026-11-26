@@ -84,9 +84,10 @@ jobs:
           grep -F 'moreButton=button("Ещё",false)' "$SRC"
           grep -F 'showAdFilterDialog();' "$SRC"
           grep -F '.setItems(choices' "$SRC"
-          grep -F 'installVkFirstTapSupport();' "$SRC"
-          grep -F 'installVkFrameSupport();' "$SRC"
           grep -F 'installAdCosmeticFilters();' "$SRC"
+          if grep -F 'MainActivity.this.installVkFirstTapSupport();' "$SRC"; then echo "VK first-tap click hook must stay disabled"; exit 1; fi
+          if grep -F 'MainActivity.this.installVkFrameSupport();' "$SRC"; then echo "VK frame click retry hook must stay disabled"; exit 1; fi
+          if grep -F 'addFullscreenControls();' patches/patch_player.py; then echo "Custom fullscreen overlay must stay disabled"; exit 1; fi
           grep -F 'isKnownAdRequest(String url)' patches/patch_player.py
           grep -F 'isKnownAdRequest(requestUrl)' patches/patch_player.py
           grep -F 'replace(/\\s+/g' patches/patch_mx_crossframe.py
@@ -109,8 +110,6 @@ jobs:
           grep -F 'MainActivity.this.armMxPlayIntent();' patches/patch_player.py
           grep -F 'launchCapturedMedia()' patches/patch_player.py
           grep -F 'try{v.pause();}catch(e){}' patches/patch_player.py
-          grep -F 'addFullscreenControls();' patches/patch_player.py
-          grep -F 'exit.setOnClickListener(v -> hideCustomView());' patches/patch_player.py
           grep -F 'refreshButton=button("↻",false)' "$SRC"
           grep -F '.setSingleChoiceItems(new String[]{"Стабильные обновления", "Тестовые сборки"}' "$UPD"
           cp "$SRC" "$RUNNER_TEMP/RuFilmTV-patched-MainActivity.java"
