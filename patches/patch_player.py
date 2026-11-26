@@ -1083,7 +1083,6 @@ s=s.replace('decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYS
 
 # Persist all edits, including the native-player bridge appended above.
 # Requested cleanup: preserve the current player, remove redundant season/episode and volume overlay.
-s = s.replace('fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();', 'fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));\n                addFullscreenControls();')
 # Hide bottom navigation only on film/series detail pages that actually contain a player.
 s = s.replace('private View rootLayout, customView;', 'private View rootLayout, customView, bottomNav;')
 s = s.replace('root.addView(nav);setContentView(root);updateTabs();', 'bottomNav=nav;root.addView(nav);setContentView(root);updateTabs();')
