@@ -1322,3 +1322,5 @@ print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
 
 # Trigger rebuild after Java line-break correction.
+
+# Trigger beta.42 rebuild after fullscreen overlay cleanup.
