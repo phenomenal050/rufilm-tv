@@ -76,6 +76,7 @@ jobs:
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
       - name: Verify original VK player mode, menus and ad-filter toggle
         run: |
           set -euo pipefail
@@ -86,6 +87,8 @@ jobs:
           grep -F '.setItems(choices' "$SRC"
           grep -F 'installAdCosmeticFilters();' "$SRC"
           if grep -F 'MainActivity.this.installVkFirstTapSupport();' "$SRC"; then echo "VK first-tap click hook must stay disabled"; exit 1; fi
+          grep -F 'logVkPointerEvent("ACTIVITY_TOUCH"' "$SRC"
+          grep -F 'logVkPointerEvent("WEBVIEW_TOUCH"' "$SRC"
           if grep -F 'MainActivity.this.installVkFrameSupport();' "$SRC"; then echo "VK frame click retry hook must stay disabled"; exit 1; fi
           if grep -F 'addFullscreenControls();' patches/patch_player.py; then echo "Custom fullscreen overlay must stay disabled"; exit 1; fi
           grep -F 'isKnownAdRequest(String url)' patches/patch_player.py
