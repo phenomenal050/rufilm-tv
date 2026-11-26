@@ -745,7 +745,7 @@ fullscreen_methods = r"""
                 return false;
             });
         }
-        // This transparent full-screen layer must never become a mouse/touch target.
+        // This transparent full-screen layer must never become a mouse/touch target (VK click-through fix).
         // Its child buttons remain interactive; empty areas pass input to VK's original controls.
         fullscreenControls.setClickable(false);
         fullscreenControls.setLongClickable(false);
