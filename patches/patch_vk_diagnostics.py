@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Add privacy-safe VK/WebView diagnostics to the generated MainActivity.java."""
 import pathlib
+import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
