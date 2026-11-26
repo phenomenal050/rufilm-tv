@@ -288,7 +288,8 @@ public class NativePlayerActivity extends Activity {
         setContentView(root);
         showAssistantControls();
 
-        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
+        String playbackUrl = createPlaybackUrl(rawUrl, headers);
+        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
@@ -346,6 +347,21 @@ public class NativePlayerActivity extends Activity {
         scheduleAssistantHide();
     }
 
+    // Route native playback through the authenticated loopback bridge. HLS/DASH
+    // manifests are rewritten so every child playlist, segment and key receives
+    // the correct host-scoped cookies and the captured WebView request headers.
+    private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
+        try {
+            String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
+            android.util.Log.i("RuFilmTV", "Media3 stream routed through LocalStreamProxy: " +
+                Uri.parse(sourceUrl).getHost());
+            return proxyUrl;
+        } catch (Exception e) {
+            android.util.Log.e("RuFilmTV", "LocalStreamProxy startup failed; trying direct Media3 URL", e);
+            return sourceUrl;
+        }
+    }
+
     private void syncEpisodeStreamAfterSelection() {
         syncHandler.postDelayed(() -> trySyncEpisodeStream(0), 700L);
     }
@@ -396,7 +412,8 @@ public class NativePlayerActivity extends Activity {
             .setReadTimeoutMs(45000)
             .setDefaultRequestProperties(headers);
         DefaultMediaSourceFactory factory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, httpFactory));
-        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(url));
+        String playbackUrl = createPlaybackUrl(url, headers);
+        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
         String lower = url.toLowerCase(Locale.ROOT);
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
