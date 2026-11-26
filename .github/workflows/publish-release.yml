@@ -106,6 +106,7 @@ jobs:
           python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_webview_inspector.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_video_fullscreen_button.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
 
       - name: Build signed release APK
         working-directory: rufilm-tv-2.9
@@ -120,6 +121,9 @@ jobs:
           grep -F 'new FrameLayout.LayoutParams(dp(104), dp(58), Gravity.TOP | Gravity.END)' "$SRC"
           grep -F 'RuFilmMouse' "$SRC"
           grep -F 'WebView.setWebContentsDebuggingEnabled(true)' "$SRC"
+          grep -F 'videoFullscreenButton=button("⛶",true)' "$SRC"
+          grep -F 'enterVideoFullscreenMode()' "$SRC"
+          grep -F 'exitVideoFullscreenMode()' "$SRC"
           grep -F 'RuFilmVK' "$SRC"
           if grep -F 'fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1))' "$SRC"; then echo "Fullscreen overlay must not cover VK controls"; exit 1; fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep -F "name='tv.rufilm.app' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"

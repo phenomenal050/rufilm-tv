@@ -79,6 +79,7 @@ jobs:
           python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_webview_inspector.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_video_fullscreen_button.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
       - name: Verify original VK player mode, menus and ad-filter toggle
         run: |
           set -euo pipefail
@@ -92,6 +93,9 @@ jobs:
           grep -F 'logVkPointerEvent("ACTIVITY_TOUCH"' "$SRC"
           grep -F 'logVkPointerEvent("WEBVIEW_TOUCH"' "$SRC"
           grep -F 'WebView.setWebContentsDebuggingEnabled(true)' "$SRC"
+          grep -F 'videoFullscreenButton=button("⛶",true)' "$SRC"
+          grep -F 'enterVideoFullscreenMode()' "$SRC"
+          grep -F 'exitVideoFullscreenMode()' "$SRC"
           grep -F 'new FrameLayout.LayoutParams(dp(104), dp(58), Gravity.TOP | Gravity.END)' "$SRC"
           if grep -F 'fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1))' "$SRC"; then echo "Fullscreen overlay must not cover VK controls"; exit 1; fi
           if grep -F 'MainActivity.this.installVkFrameSupport();' "$SRC"; then echo "VK frame click retry hook must stay disabled"; exit 1; fi
