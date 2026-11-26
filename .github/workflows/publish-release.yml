@@ -98,6 +98,7 @@ jobs:
           python3 patches/brand_tv.py
           python3 patches/update_support.py
           install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
+          install -D patches/LocalStreamProxy.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
