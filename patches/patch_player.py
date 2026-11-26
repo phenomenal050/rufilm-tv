@@ -745,11 +745,13 @@ fullscreen_methods = r"""
                 return false;
             });
         }
-        // Let the original HTML5 video receive the click; use it only to reveal controls.
-        fullscreenControls.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) showFullscreenUi();
-            return false;
-        });
+        // This transparent full-screen layer must never become a mouse/touch target.
+        // Its child buttons remain interactive; empty areas pass input to VK's original controls.
+        fullscreenControls.setClickable(false);
+        fullscreenControls.setLongClickable(false);
+        fullscreenControls.setFocusable(false);
+        fullscreenControls.setFocusableInTouchMode(false);
+        fullscreenControls.setOnTouchListener(null);
         fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout bar = new LinearLayout(this);
