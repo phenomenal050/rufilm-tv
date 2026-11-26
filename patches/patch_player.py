@@ -15,6 +15,7 @@ once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map
 once('    private boolean externalLaunchPending = false;', '''    private boolean externalLaunchPending = false;
     private volatile long mxPlayIntentUntil = 0L;
     private volatile boolean mxOfferTriggered = false;
+    private volatile String mxRequestedActiveUrl = null;
     private final Object mediaCaptureLock = new Object();
     private String capturedMediaUrl = null;
     private String capturedMediaReferer = null;
@@ -184,16 +185,26 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     }
 
     // Arm a short capture window after a deliberate Play/fullscreen gesture.
-    private void armMxPlayIntent() {
+    private void armMxPlayIntent(String activeUrl) {
         mxPlayIntentUntil = System.currentTimeMillis() + 15000L;
         mxOfferTriggered = false;
+        mxRequestedActiveUrl = activeUrl != null &&
+            (activeUrl.startsWith("https://") || activeUrl.startsWith("http://"))
+            ? activeUrl : null;
         maybeOfferMxPlayer(0L);
+    }
+
+    private void armMxPlayIntent() {
+        armMxPlayIntent(null);
     }
 
     private void maybeOfferMxPlayer(long positionMs) {
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
+            // When the WebView exposes the active HTML5 source, never hand off a
+            // different playlist/file captured from another player or background request.
+            if (mxRequestedActiveUrl != null && !mxRequestedActiveUrl.equals(capturedMediaUrl)) return;
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -358,6 +369,7 @@ once('''        @JavascriptInterface public boolean isNativeEnabled() { return "
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }
         @JavascriptInterface public void offerMxPlayer(long positionMs) { MainActivity.this.offerMxPlayer(positionMs); }
         @JavascriptInterface public void armMxPlayIntent() { MainActivity.this.armMxPlayIntent(); }
+        @JavascriptInterface public void armMxPlayIntent(String activeUrl) { MainActivity.this.armMxPlayIntent(activeUrl); }
         @JavascriptInterface public void captureMxMedia(String url, String referer, String userAgent) {
             MainActivity.this.captureMxMedia(url, referer, userAgent);
         }
@@ -602,8 +614,8 @@ if web_ctor and 'rufilmPlayerGesture' not in s:
                         "for(var i=0;n&&i<8;i++,n=n.parentElement){" +
                         "if(n.tagName==='VIDEO'||n.tagName==='IFRAME'){hit=true;break;}" +
                         "if(n.querySelector){var r=n.getBoundingClientRect();if(r.width>100&&r.height>60&&n.querySelector('video,iframe')){hit=true;break;}}}" +
-                        "if(!hit)return false;var bridge=window.RuFilmPlayer;" +
-                        "if(bridge&&bridge.armMxPlayIntent){bridge.armMxPlayIntent();return true;}return false;" +
+                        "if(!hit)return false;var activeUrl='';try{var vd=e&&e.closest?e.closest('video'):null;if(!vd&&n&&n.querySelector)vd=n.querySelector('video');if(vd)activeUrl=String(vd.currentSrc||vd.src||'');}catch(z){}" +
+                        "var bridge=window.RuFilmPlayer;if(bridge&&bridge.armMxPlayIntent){bridge.armMxPlayIntent(activeUrl);return true;}return false;" +
                         "}catch(x){return false;}})()";
                     web.evaluateJavascript(js, value ->
                         android.util.Log.i("RuFilmTV", "Double-click Media3 handoff accepted=" + value));
