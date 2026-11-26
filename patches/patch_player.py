@@ -607,7 +607,8 @@ if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
                     final boolean enter = rufilmPlayerFullscreen[0];
                     String js = "(function(){var k='__rufilmDblFsTarget',old='__rufilmDblFsOldStyle';" +
                         "if(!" + enter + "){var p=window[k];if(p){if(p.hasAttribute(old)){p.setAttribute('style',p.getAttribute(old));p.removeAttribute(old);}else p.removeAttribute('style');}" +
-                        "window[k]=null;return;}var e=document.elementFromPoint(" + px + "," + py + ");" +
+                        "window[k]=null;if(window.__rufilmDblFsOldOverflow!==undefined){document.documentElement.style.overflow=window.__rufilmDblFsOldOverflow;delete window.__rufilmDblFsOldOverflow;}return;}" +
+                        "window.__rufilmDblFsOldOverflow=document.documentElement.style.overflow;var e=document.elementFromPoint(" + px + "," + py + ");" +
                         "while(e&&e!==document.body&&!(/^(VIDEO|IFRAME)$/.test(e.tagName)))e=e.parentElement;" +
                         "if(!e||e===document.body){var a=document.querySelectorAll('video,iframe');for(var i=a.length-1;i>=0;i--){var r=a[i].getBoundingClientRect();if(r.width>80&&r.height>45){e=a[i];break;}}}" +
                         "if(!e)return;if(window[k]&&window[k]!==e){var q=window[k];if(q.hasAttribute(old))q.setAttribute('style',q.getAttribute(old));else q.removeAttribute('style');}" +
