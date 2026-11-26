@@ -15,7 +15,6 @@ once("import java.util.Locale;", "import java.util.Locale;\nimport java.util.Map
 once('    private boolean externalLaunchPending = false;', '''    private boolean externalLaunchPending = false;
     private volatile long mxPlayIntentUntil = 0L;
     private volatile boolean mxOfferTriggered = false;
-    private volatile String mxRequestedActiveUrl = null;
     private final Object mediaCaptureLock = new Object();
     private String capturedMediaUrl = null;
     private String capturedMediaReferer = null;
@@ -185,26 +184,16 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     }
 
     // Arm a short capture window after a deliberate Play/fullscreen gesture.
-    private void armMxPlayIntent(String activeUrl) {
+    private void armMxPlayIntent() {
         mxPlayIntentUntil = System.currentTimeMillis() + 15000L;
         mxOfferTriggered = false;
-        mxRequestedActiveUrl = activeUrl != null &&
-            (activeUrl.startsWith("https://") || activeUrl.startsWith("http://"))
-            ? activeUrl : null;
         maybeOfferMxPlayer(0L);
-    }
-
-    private void armMxPlayIntent() {
-        armMxPlayIntent(null);
     }
 
     private void maybeOfferMxPlayer(long positionMs) {
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
-            // When the WebView exposes the active HTML5 source, never hand off a
-            // different playlist/file captured from another player or background request.
-            if (mxRequestedActiveUrl != null && !mxRequestedActiveUrl.equals(capturedMediaUrl)) return;
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -369,7 +358,6 @@ once('''        @JavascriptInterface public boolean isNativeEnabled() { return "
         @JavascriptInterface public boolean openCaptured() { return launchCapturedMedia(); }
         @JavascriptInterface public void offerMxPlayer(long positionMs) { MainActivity.this.offerMxPlayer(positionMs); }
         @JavascriptInterface public void armMxPlayIntent() { MainActivity.this.armMxPlayIntent(); }
-        @JavascriptInterface public void armMxPlayIntent(String activeUrl) { MainActivity.this.armMxPlayIntent(activeUrl); }
         @JavascriptInterface public void captureMxMedia(String url, String referer, String userAgent) {
             MainActivity.this.captureMxMedia(url, referer, userAgent);
         }
@@ -406,9 +394,9 @@ episode_support = r'''
             "if(/сезон|season/i.test(t))el.setAttribute('aria-label','Выбор сезона');" +
             "else if(/серия|эпизод|episode/i.test(t))el.setAttribute('aria-label','Выбор серии');" +
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
-            "function installMxOffer(){var docs=[];function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
+            "function installMxOffer(){var docs=[];try{document.addEventListener('click',function(e){var f=e.target&&e.target.closest?e.target.closest('iframe'):null;if(f&&/vk|alloha|stravers/i.test(f.src||'')){try{var z=window.RuFilmPlayer;if(z&&z.armMxPlayIntent)z.armMxPlayIntent();}catch(q){}}},true);}catch(q){}function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
             "function bindDoc(d){try{var w=d.defaultView||window;[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
-            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.armMxPlayIntent)b.armMxPlayIntent();if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
             "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
             "collect(window,0);docs.forEach(bindDoc);}" +
             "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
@@ -596,38 +584,15 @@ if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
 
 # Make WebView requests look like the installed Chrome engine and allow player iframe cookies.
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
-if web_ctor and 'rufilmPlayerGesture' not in s:
+if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
-        final int rufilmNormalSystemUi = getWindow().getDecorView().getSystemUiVisibility();
-        final boolean[] rufilmPlayerFullscreen = new boolean[] { false };
-        final android.view.GestureDetector rufilmPlayerGesture = new android.view.GestureDetector(this,
-            new android.view.GestureDetector.SimpleOnGestureListener() {
-                @Override public boolean onDoubleTap(MotionEvent event) {
-                    final float density = getResources().getDisplayMetrics().density;
-                    final float pageScale = Math.max(0.1f, web.getScale());
-                    final int px = Math.round(event.getX() / density / pageScale);
-                    final int py = Math.round(event.getY() / density / pageScale);
-                    String js = "(function(){try{" +
-                        "var e=document.elementFromPoint(" + px + "," + py + "),n=e,hit=false;" +
-                        "for(var i=0;n&&i<8;i++,n=n.parentElement){" +
-                        "if(n.tagName==='VIDEO'||n.tagName==='IFRAME'){hit=true;break;}" +
-                        "if(n.querySelector){var r=n.getBoundingClientRect();if(r.width>100&&r.height>60&&n.querySelector('video,iframe')){hit=true;break;}}}" +
-                        "if(!hit)return false;var activeUrl='';try{var vd=e&&e.closest?e.closest('video'):null;if(!vd&&n&&n.querySelector)vd=n.querySelector('video');if(vd)activeUrl=String(vd.currentSrc||vd.src||'');}catch(z){}" +
-                        "var bridge=window.RuFilmPlayer;if(bridge&&bridge.armMxPlayIntent){bridge.armMxPlayIntent(activeUrl);return true;}return false;" +
-                        "}catch(x){return false;}})()";
-                    web.evaluateJavascript(js, value ->
-                        android.util.Log.i("RuFilmTV", "Double-click Media3 handoff accepted=" + value));
-                    return true;
-                }
-                @Override public boolean onSingleTapConfirmed(MotionEvent event) { return false; }
-            });
         web.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.requestFocus();
+                v.requestFocusFromTouch();
             }
-            rufilmPlayerGesture.onTouchEvent(event);
             return false;
         });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
@@ -780,13 +745,11 @@ fullscreen_methods = r"""
                 return false;
             });
         }
-        // This transparent full-screen layer must never become a mouse/touch target (VK click-through fix).
-        // Its child buttons remain interactive; empty areas pass input to VK's original controls.
-        fullscreenControls.setClickable(false);
-        fullscreenControls.setLongClickable(false);
-        fullscreenControls.setFocusable(false);
-        fullscreenControls.setFocusableInTouchMode(false);
-        fullscreenControls.setOnTouchListener(null);
+        // Let the original HTML5 video receive the click; use it only to reveal controls.
+        fullscreenControls.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) showFullscreenUi();
+            return false;
+        });
         fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout bar = new LinearLayout(this);
@@ -1108,7 +1071,8 @@ fullscreen_anchor = """            @Override public void onShowCustomView(View v
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Keep website fullscreen separate; Media3 launches only on player double-click."""
+                // Original-player-only mode: never intercept VK/HTML5 fullscreen for Media3.
+                MainActivity.this.armMxPlayIntent();"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")

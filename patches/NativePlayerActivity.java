@@ -288,23 +288,8 @@ public class NativePlayerActivity extends Activity {
         setContentView(root);
         showAssistantControls();
 
+        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(rawUrl));
         String lower = rawUrl.toLowerCase(Locale.ROOT);
-        String playbackUrl = rawUrl;
-        // VK HLS/DASH manifests often require the WebView's session headers on
-        // every child playlist, segment and encryption-key request. Route those
-        // requests through the loopback proxy, which forwards the captured headers
-        // and resolves host-scoped cookies for each upstream URL.
-        if (lower.contains(".m3u8") || lower.contains(".mpd")) {
-            try {
-                playbackUrl = LocalStreamProxy.start(rawUrl, headers);
-                android.util.Log.i("RuFilmTV", "Manifest playback routed through authenticated stream proxy");
-            } catch (Exception proxyError) {
-                android.util.Log.w("RuFilmTV", "Stream proxy unavailable; trying direct manifest request",
-                    proxyError);
-                playbackUrl = rawUrl;
-            }
-        }
-        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
         else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
         player.setMediaItem(item.build());
