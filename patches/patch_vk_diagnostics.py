@@ -169,5 +169,114 @@ http_methods = '''            @Override public void onReceivedHttpError(WebView 
 '''
 replace_once(http_anchor, http_methods + http_anchor, "HTTP and SSL diagnostics")
 
+
+# Mouse/pointer diagnostics for the inline WebView player (including Tanix W2).
+mouse_helpers = r'''
+    private long lastVkPointerMoveLogAt = 0L;
+
+    private void logVkPointerEvent(String source, android.view.MotionEvent event, android.view.View target) {
+        if (event == null) return;
+        int action = event.getActionMasked();
+        int tool = event.getPointerCount() > 0 ? event.getToolType(0) : -1;
+        boolean mouse = tool == android.view.MotionEvent.TOOL_TYPE_MOUSE ||
+            tool == android.view.MotionEvent.TOOL_TYPE_STYLUS ||
+            (event.getSource() & android.view.InputDevice.SOURCE_MOUSE) == android.view.InputDevice.SOURCE_MOUSE;
+        boolean pointerAction = action == android.view.MotionEvent.ACTION_HOVER_ENTER ||
+            action == android.view.MotionEvent.ACTION_HOVER_MOVE ||
+            action == android.view.MotionEvent.ACTION_HOVER_EXIT ||
+            action == android.view.MotionEvent.ACTION_BUTTON_PRESS ||
+            action == android.view.MotionEvent.ACTION_BUTTON_RELEASE ||
+            action == android.view.MotionEvent.ACTION_SCROLL;
+        if (!mouse && !pointerAction) return;
+        long now = android.os.SystemClock.uptimeMillis();
+        if (action == android.view.MotionEvent.ACTION_HOVER_MOVE && now - lastVkPointerMoveLogAt < 250L) return;
+        if (action == android.view.MotionEvent.ACTION_HOVER_MOVE) lastVkPointerMoveLogAt = now;
+        float x = event.getX(), y = event.getY();
+        float rawX = event.getRawX(), rawY = event.getRawY();
+        int width = target == null ? -1 : target.getWidth();
+        int height = target == null ? -1 : target.getHeight();
+        android.util.Log.i("RuFilmMouse", source + " action=" + action +
+            " tool=" + tool + " source=0x" + Integer.toHexString(event.getSource()) +
+            " buttons=0x" + Integer.toHexString(event.getButtonState()) +
+            " xy=" + Math.round(x) + "," + Math.round(y) +
+            " raw=" + Math.round(rawX) + "," + Math.round(rawY) +
+            " view=" + width + "x" + height +
+            " device=" + event.getDeviceId());
+    }
+'''
+anchor = '    // VK WebView diagnostics. Never log query strings, cookies, auth headers or request values.'
+if 'private void logVkPointerEvent(' not in source:
+    replace_once(anchor, mouse_helpers + '\n' + anchor, 'mouse diagnostic helper')
+
+old_touch = '''        web.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.requestFocus();
+                v.requestFocusFromTouch();
+            }
+            return false;
+        });'''
+new_touch = '''        web.setOnTouchListener((v, event) -> {
+            logVkPointerEvent("WEBVIEW_TOUCH", event, v);
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.requestFocus();
+                v.requestFocusFromTouch();
+            }
+            return false;
+        });'''
+if old_touch in source:
+    replace_once(old_touch, new_touch, 'WebView touch event logging')
+elif 'logVkPointerEvent("WEBVIEW_TOUCH"' not in source:
+    raise SystemExit('Required WebView touch listener anchor not found for mouse diagnostics')
+
+old_dispatch_touch = '''    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
+            showFullscreenUi();
+        return super.dispatchTouchEvent(event);
+    }'''
+new_dispatch_touch = '''    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        logVkPointerEvent("ACTIVITY_TOUCH", event, web);
+        if (customView != null && event != null && event.getAction() == MotionEvent.ACTION_DOWN)
+            showFullscreenUi();
+        return super.dispatchTouchEvent(event);
+    }'''
+if old_dispatch_touch in source:
+    replace_once(old_dispatch_touch, new_dispatch_touch, 'Activity touch event logging')
+elif 'logVkPointerEvent("ACTIVITY_TOUCH"' not in source:
+    raise SystemExit('Required dispatchTouchEvent anchor not found for mouse diagnostics')
+
+old_dispatch_generic = '''    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        boolean handled = super.dispatchGenericMotionEvent(event);
+        if (customView != null && event != null) {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_HOVER_ENTER ||
+                    action == MotionEvent.ACTION_HOVER_MOVE ||
+                    action == MotionEvent.ACTION_SCROLL) {
+                revealSystemCursor();
+                setSystemCursorVisible(true);
+                showFullscreenUi();
+            }
+        }
+        return handled;
+    }'''
+new_dispatch_generic = '''    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        logVkPointerEvent("ACTIVITY_GENERIC", event, web);
+        boolean handled = super.dispatchGenericMotionEvent(event);
+        if (customView != null && event != null) {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_HOVER_ENTER ||
+                    action == MotionEvent.ACTION_HOVER_MOVE ||
+                    action == MotionEvent.ACTION_SCROLL) {
+                revealSystemCursor();
+                setSystemCursorVisible(true);
+                showFullscreenUi();
+            }
+        }
+        return handled;
+    }'''
+if old_dispatch_generic in source:
+    replace_once(old_dispatch_generic, new_dispatch_generic, 'Activity generic pointer event logging')
+elif 'logVkPointerEvent("ACTIVITY_GENERIC"' not in source:
+    raise SystemExit('Required dispatchGenericMotionEvent anchor not found for mouse diagnostics')
+
 path.write_text(source, encoding="utf-8")
 print("Added privacy-safe VK diagnostics to", path)
