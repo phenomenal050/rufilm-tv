@@ -588,11 +588,48 @@ if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
+        final int rufilmNormalSystemUi = getWindow().getDecorView().getSystemUiVisibility();
+        final boolean[] rufilmPlayerFullscreen = new boolean[] { false };
+        final android.view.GestureDetector rufilmPlayerGesture = new android.view.GestureDetector(this,
+            new android.view.GestureDetector.SimpleOnGestureListener() {
+                @Override public boolean onDoubleTap(MotionEvent event) {
+                    rufilmPlayerFullscreen[0] = !rufilmPlayerFullscreen[0];
+                    if (rufilmPlayerFullscreen[0]) {
+                        getWindow().getDecorView().setSystemUiVisibility(
+                            View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+                    } else {
+                        getWindow().getDecorView().setSystemUiVisibility(rufilmNormalSystemUi);
+                    }
+                    final int px = Math.round(event.getX());
+                    final int py = Math.round(event.getY());
+                    final boolean enter = rufilmPlayerFullscreen[0];
+                    String js = "(function(){var k='__rufilmDblFsTarget',old='__rufilmDblFsOldStyle';" +
+                        "if(!" + enter + "){var p=window[k];if(p){if(p.hasAttribute(old)){p.setAttribute('style',p.getAttribute(old));p.removeAttribute(old);}else p.removeAttribute('style');}" +
+                        "window[k]=null;return;}var e=document.elementFromPoint(" + px + "," + py + ");" +
+                        "while(e&&e!==document.body&&!(/^(VIDEO|IFRAME)$/.test(e.tagName)))e=e.parentElement;" +
+                        "if(!e||e===document.body){var a=document.querySelectorAll('video,iframe');for(var i=a.length-1;i>=0;i--){var r=a[i].getBoundingClientRect();if(r.width>80&&r.height>45){e=a[i];break;}}}" +
+                        "if(!e)return;if(window[k]&&window[k]!==e){var q=window[k];if(q.hasAttribute(old))q.setAttribute('style',q.getAttribute(old));else q.removeAttribute('style');}" +
+                        "window[k]=e;e.setAttribute(old,e.getAttribute('style')||'');" +
+                        "e.style.setProperty('position','fixed','important');e.style.setProperty('left','0','important');e.style.setProperty('top','0','important');" +
+                        "e.style.setProperty('width','100vw','important');e.style.setProperty('height','100vh','important');" +
+                        "e.style.setProperty('max-width','none','important');e.style.setProperty('max-height','none','important');" +
+                        "e.style.setProperty('margin','0','important');e.style.setProperty('z-index','2147483647','important');" +
+                        "e.style.setProperty('background','#000','important');e.style.setProperty('object-fit','contain','important');" +
+                        "document.documentElement.style.setProperty('overflow','hidden','important');" +
+                        "})()";
+                    web.evaluateJavascript(js, null);
+                    return true;
+                }
+                @Override public boolean onSingleTapConfirmed(MotionEvent event) { return false; }
+            });
         web.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.requestFocus();
                 v.requestFocusFromTouch();
             }
+            rufilmPlayerGesture.onTouchEvent(event);
             return false;
         });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
