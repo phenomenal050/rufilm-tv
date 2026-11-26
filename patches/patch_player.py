@@ -614,7 +614,6 @@ if web_ctor and 'rufilmPlayerGesture' not in s:
         web.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.requestFocus();
-                v.requestFocusFromTouch();
             }
             rufilmPlayerGesture.onTouchEvent(event);
             return false;
