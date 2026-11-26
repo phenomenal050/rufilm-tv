@@ -399,18 +399,8 @@ episode_support = r'''
             "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
             "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
             "collect(window,0);docs.forEach(bindDoc);}" +
-            "function installFullscreenButton(){var vids=[].slice.call(document.querySelectorAll('video'));vids.forEach(function(v){if(v.__rufilmFsButton)return;" +
-            "var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Во весь экран');b.title='Во весь экран';" +
-            "b.innerHTML='<svg viewBox=\"0 0 24 24\" width=\"25\" height=\"25\" fill=\"none\" stroke=\"white\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H3v5M3 3l7 7M16 3h5v5m0-5-7 7M8 21H3v-5m0 5 7-7m6 7h5v-5m0 5-7-7\"/></svg>';" +
-            "b.style.cssText='position:fixed;z-index:2147483647;width:52px;height:52px;border:1px solid rgba(255,255,255,.72);border-radius:50%;background:rgba(105,91,226,.97);box-shadow:0 4px 16px rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;opacity:.98;-webkit-tap-highlight-color:transparent;';" +
-            "b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();try{if(v.requestFullscreen)v.requestFullscreen();else if(v.webkitEnterFullscreen)v.webkitEnterFullscreen();}catch(x){}},true);" +
-            "document.body.appendChild(b);v.__rufilmFsButton=b;function place(){try{var r=v.getBoundingClientRect(),w=document.documentElement.clientWidth,h=document.documentElement.clientHeight;" +
-            "var visible=!v.paused&&r.width>120&&r.height>70&&r.bottom>0&&r.top<h&&r.right>0&&r.left<w&&getComputedStyle(v).visibility!=='hidden'&&getComputedStyle(v).display!=='none';" +
-            "b.style.display=visible?'flex':'none';if(visible){var x=Math.max(8,Math.min(w-60,r.left+(r.width-52)/2));var y=r.bottom+9;if(y+52>h)y=Math.max(8,r.bottom-60);b.style.left=x+'px';b.style.top=y+'px';}}catch(x){b.style.display='none';}}" +
-            "['loadedmetadata','play','pause','timeupdate','durationchange','emptied'].forEach(function(e){v.addEventListener(e,place);});" +
-            "window.addEventListener('resize',place);window.addEventListener('scroll',place,true);place();v.__rufilmFsPlace=place;});}" +
-            "installMxOffer();installFullscreenButton();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
-            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installMxOffer();installFullscreenButton();mark();},350);});" +
+            "installMxOffer();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
+            "var queued=false;window.__rufilmTvDpadObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;installMxOffer();mark();},350);});" +
             "window.__rufilmTvDpadObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
         web.evaluateJavascript(script, null);
@@ -934,15 +924,6 @@ s = s.replace(
     "fullscreenContainer=new CursorVisibleFrame(MainActivity.this);",
     1
 )
-view_anchor = "fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));"
-if view_anchor in s and "installFullscreenCursor(view);" not in s:
-    nl = chr(10)
-    cursor_code = (view_anchor + nl
-                   + "                installFullscreenCursor(view);" + nl
-                   + "                installFullscreenCursor(fullscreenContainer);" + nl
-                   + "                setSystemCursorVisible(true);" + nl
-                   + "")
-    s = s.replace(view_anchor, cursor_code, 1)
 
 hide_anchor = "if(customView==null)return;";
 if "fullscreenUiHandler.removeCallbacks(hideSystemCursor);" not in s:
@@ -1049,21 +1030,6 @@ if "private boolean isAdFilteringEnabled()" not in s:
     if anchor not in s: raise SystemExit("Ad-filter dialog insertion anchor missing")
     s = s.replace(anchor, ad_filter_controls + "\n" + anchor, 1)
 
-s=s.replace('''                if (Build.VERSION.SDK_INT >= 24) {
-                    view.setOnHoverListener((v, event) -> {''', '''                if (Build.VERSION.SDK_INT >= 24) {
-                    view.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                    view.setOnHoverListener((v, event) -> {''', 1)
-s=s.replace('''                fullscreenContainer.setBackgroundColor(Color.BLACK);
-                fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''', '''                fullscreenContainer.setBackgroundColor(Color.BLACK);
-                if (Build.VERSION.SDK_INT >= 24) {
-                    fullscreenContainer.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                    fullscreenContainer.setOnHoverListener((v, event) -> {
-                        if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER || event.getAction() == MotionEvent.ACTION_HOVER_MOVE)
-                            v.setPointerIcon(PointerIcon.getSystemIcon(MainActivity.this, PointerIcon.TYPE_ARROW));
-                        return false;
-                    });
-                }
-                fullscreenContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));''')
 
 # Keep the original HTML5/VK player in its own fullscreen surface.
 # Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
