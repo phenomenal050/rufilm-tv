@@ -265,6 +265,58 @@ public class NativePlayerActivity extends Activity {
         transport.addView(forward, new android.widget.LinearLayout.LayoutParams(dp(58), dp(54)));
         forward.setOnClickListener(v -> { if (player != null) player.seekTo(Math.min(player.getDuration(), player.getCurrentPosition()+10000L)); showAssistantControls(); });
 
+        // Media3 volume control: independent from the device's system volume.
+        android.widget.LinearLayout volumeControls = new android.widget.LinearLayout(this);
+        volumeControls.setGravity(Gravity.CENTER_VERTICAL);
+        android.widget.FrameLayout.LayoutParams volumeParams = new android.widget.FrameLayout.LayoutParams(-2, -1, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        controlRow.addView(volumeControls, volumeParams);
+
+        volumeButton = new Button(this);
+        volumeButton.setText("🔊");
+        volumeButton.setTextSize(18);
+        volumeButton.setMinWidth(0);
+        volumeButton.setMinimumWidth(0);
+        volumeButton.setPadding(0, 0, 0, 0);
+        volumeButton.setBackgroundColor(0x00000000);
+        volumeButton.setContentDescription("Отключить или включить звук");
+        volumeButton.setFocusable(true);
+        volumeControls.addView(volumeButton, new android.widget.LinearLayout.LayoutParams(dp(48), dp(54)));
+
+        volumeSeekBar = new android.widget.SeekBar(this);
+        volumeSeekBar.setMax(100);
+        volumeSeekBar.setProgress(100);
+        volumeSeekBar.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffffffff));
+        volumeSeekBar.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffffffff));
+        volumeSeekBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x99ffffff));
+        volumeSeekBar.setPadding(dp(4), 0, dp(4), 0);
+        volumeSeekBar.setFocusable(true);
+        volumeSeekBar.setContentDescription("Громкость Media3");
+        volumeControls.addView(volumeSeekBar, new android.widget.LinearLayout.LayoutParams(dp(142), dp(44)));
+
+        volumeButton.setOnClickListener(v -> {
+            if (player == null) return;
+            if (player.getVolume() > 0f) {
+                volumeBeforeMute = player.getVolume();
+                player.setVolume(0f);
+            } else {
+                player.setVolume(volumeBeforeMute > 0f ? volumeBeforeMute : 1f);
+            }
+            updateVolumeControls();
+            showAssistantControls();
+        });
+        volumeSeekBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && player != null) {
+                    float value = progress / 100f;
+                    player.setVolume(value);
+                    if (value > 0f) volumeBeforeMute = value;
+                    updateVolumeButton();
+                }
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { showAssistantControls(); }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) { scheduleAssistantHide(); }
+        });
+
         displayButton = controlText("⛶", 23);
         android.widget.FrameLayout.LayoutParams displayParams = new android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         controlRow.addView(displayButton, displayParams);
@@ -494,6 +546,21 @@ public class NativePlayerActivity extends Activity {
             .show();
     }
 
+
+    private void updateVolumeButton() {
+        if (volumeButton == null || player == null) return;
+        volumeButton.setText(player.getVolume() <= 0.001f ? "🔇" : (player.getVolume() < 0.5f ? "🔉" : "🔊"));
+        volumeButton.setContentDescription(player.getVolume() <= 0.001f
+            ? "Включить звук" : "Отключить звук");
+    }
+
+    private void updateVolumeControls() {
+        if (volumeSeekBar != null && player != null) {
+            int progress = Math.round(player.getVolume() * 100f);
+            if (volumeSeekBar.getProgress() != progress) volumeSeekBar.setProgress(progress);
+        }
+        updateVolumeButton();
+    }
 
     private android.widget.TextView controlText(String value, int size) {
         android.widget.TextView t = new android.widget.TextView(this);
