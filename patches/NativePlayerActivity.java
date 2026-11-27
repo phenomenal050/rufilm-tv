@@ -347,11 +347,11 @@ public class NativePlayerActivity extends Activity {
         if (audioRawUrl != null && (audioRawUrl.startsWith("https://") || audioRawUrl.startsWith("http://"))) {
             String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers);
             String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers);
-            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).build();
-            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).build();
+            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
+            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).setMimeType("audio/mp4").build();
             ProgressiveMediaSource.Factory pf = new ProgressiveMediaSource.Factory(new DefaultDataSource.Factory(this, httpFactory));
             player.setMediaSource(new MergingMediaSource(pf.createMediaSource(videoItem), pf.createMediaSource(audioItem)));
-            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks; container formats detected from stream");
+            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks");
         } else {
             String playbackUrl = createPlaybackUrl(rawUrl, headers);
             MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
@@ -429,29 +429,7 @@ public class NativePlayerActivity extends Activity {
     // Route native playback through the authenticated loopback bridge. HLS/DASH
     // manifests are rewritten so every child playlist, segment and key receives
     // the correct host-scoped cookies and the captured WebView request headers.
-    private boolean isAllohaStream(String sourceUrl, Map<String, String> headers) {
-        // Alloha's media endpoints are often hosted on unrelated CDN domains.
-        // The iframe page URL is captured as Referer, so use it as the provider
-        // signal rather than guessing from the CDN hostname.
-        String referer = "";
-        if (headers != null) {
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                if (entry.getKey() != null && "referer".equalsIgnoreCase(entry.getKey())) {
-                    referer = entry.getValue() == null ? "" : entry.getValue();
-                    break;
-                }
-            }
-        }
-        String candidate = ((sourceUrl == null ? "" : sourceUrl) + " " + referer)
-            .toLowerCase(Locale.ROOT);
-        return candidate.contains("alloha");
-    }
-
     private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
-        if (isAllohaStream(sourceUrl, headers)) {
-            android.util.Log.i("RuFilmTV", "Alloha stream: bypassing LocalStreamProxy; using direct Media3 request");
-            return sourceUrl;
-        }
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
             android.util.Log.i("RuFilmTV", "Media3 stream routed through LocalStreamProxy: " +
@@ -668,7 +646,6 @@ public class NativePlayerActivity extends Activity {
             if (playerView != null) playerView.setPlayer(null);
             player.release(); player = null;
         }
-        LocalStreamProxy.stop();
     }
     @Override public void onBackPressed() { releasePlayer(); super.onBackPressed(); }
 }
