@@ -8,13 +8,13 @@ root = Path("rufilm-tv-2.9/app/src/main")
 manifest = root / "AndroidManifest.xml"
 resource = root / "res/xml/rufilm_network_security_config.xml"
 text = manifest.read_text(encoding="utf-8")
-match = re.search(r"<application\\b[^>]*>", text, re.DOTALL)
+match = re.search(r"<application\b[^>]*>", text, re.DOTALL)
 if not match:
     raise SystemExit("AndroidManifest.xml has no application element")
 tag = match.group(0)
 
 def set_attr(tag, name, value):
-    pattern = r"\\b" + re.escape(name) + r'\\s*=\\s*("[^"]*"|\\'[^\\']*\\')'
+    pattern = r"\b" + re.escape(name) + r"\s*=\s*(" + '"' + r'[^"]*' + '"' + r"|" + "'" + r"[^']*" + "'" + ")"
     if re.search(pattern, tag):
         return re.sub(pattern, lambda _: name + '="' + value + '"', tag, count=1)
     return tag[:-1] + ' ' + name + '="' + value + '">'
