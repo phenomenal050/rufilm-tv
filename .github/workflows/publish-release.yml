@@ -79,6 +79,9 @@ jobs:
       - name: Extract RuFilmTV project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
 
+      - name: Restrict cleartext traffic to the local Media3 proxy
+        run: python3 patches/patch_network_security.py
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
