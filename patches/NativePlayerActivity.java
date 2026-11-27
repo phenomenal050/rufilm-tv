@@ -383,13 +383,17 @@ public class NativePlayerActivity extends Activity {
                         androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException http =
                             (androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) cause;
                         detail += " (HTTP " + http.responseCode + ")";
-                        android.util.Log.e("RuFilmTV", "Media HTTP " + http.responseCode +
-                            " for " + http.dataSpec.uri, error);
+                        android.util.Log.e("RuFilmTV-DIAG", "Media3 HTTP " + http.responseCode +
+                            " url=" + diagnosticUrl(http.dataSpec.uri.toString()) +
+                            " responseHeaders=" + safeResponseHeaders(http.headerFields));
                         break;
                     }
                     cause = cause.getCause();
                 }
-                android.util.Log.e("RuFilmTV", "Media3 playback failed: " + error.getMessage(), error);
+                Throwable root = error;
+                while (root.getCause() != null) root = root.getCause();
+                android.util.Log.e("RuFilmTV-DIAG", "Media3 playback failed code=" + error.errorCode +
+                    " errorClass=" + root.getClass().getName());
                 Toast.makeText(NativePlayerActivity.this, detail, Toast.LENGTH_LONG).show();
                 // A failed native handoff must never strand the viewer on a black screen.
                 // Return to MainActivity, which restores and resumes the original HTML5 player.
@@ -446,21 +450,64 @@ public class NativePlayerActivity extends Activity {
         return context.contains("alloha") || context.contains("stravers");
     }
 
+    private static String diagnosticUrl(String value) {
+        try {
+            Uri u = Uri.parse(value);
+            String host = u.getHost() == null ? "unknown" : u.getHost();
+            String path = u.getPath() == null ? "/" : u.getPath();
+            return host + path;
+        } catch (Exception ignored) { return "unparseable"; }
+    }
+
+    private static String safeResponseHeaders(Map<String, java.util.List<String>> headers) {
+        if (headers == null) return "none";
+        StringBuilder out = new StringBuilder();
+        for (String key : new String[]{"Content-Type", "Content-Length", "Accept-Ranges", "Server"}) {
+            for (Map.Entry<String, java.util.List<String>> entry : headers.entrySet()) {
+                if (entry.getKey() != null && key.equalsIgnoreCase(entry.getKey())) {
+                    if (out.length() > 0) out.append(",");
+                    out.append(key).append("=").append(entry.getValue());
+                }
+            }
+        }
+        return out.length() == 0 ? "no-safe-headers" : out.toString();
+    }
+
+    private static String headerHost(Map<String, String> headers, String name) {
+        if (headers == null) return "none";
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            if (entry.getKey() != null && name.equalsIgnoreCase(entry.getKey()) && entry.getValue() != null) {
+                try { return Uri.parse(entry.getValue()).getHost(); } catch (Exception ignored) { return "invalid"; }
+            }
+        }
+        return "none";
+    }
+
     // Route OK.ru/VK through the beta.59 authenticated loopback bridge.
     // Alloha stays direct, exactly as in the beta.30 working implementation.
     private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
-        if (isAllohaPlayback(sourceUrl, headers)) {
-            android.util.Log.i("RuFilmTV", "Alloha Media3 direct handoff; Referer=" +
-                (currentReferer == null ? "captured" : Uri.parse(currentReferer).getHost()));
-            return sourceUrl;
+        boolean alloha = isAllohaPlayback(sourceUrl, headers);
+        boolean hasCookie = false, hasAuth = false, hasOrigin = false, hasReferer = false, hasUa = false;
+        if (headers != null) for (String key : headers.keySet()) {
+            if (key == null) continue;
+            if ("cookie".equalsIgnoreCase(key)) hasCookie = true;
+            else if ("authorization".equalsIgnoreCase(key)) hasAuth = true;
+            else if ("origin".equalsIgnoreCase(key)) hasOrigin = true;
+            else if ("referer".equalsIgnoreCase(key)) hasReferer = true;
+            else if ("user-agent".equalsIgnoreCase(key)) hasUa = true;
         }
+        android.util.Log.i("RuFilmTV-DIAG", "Media3 handoff source=" + diagnosticUrl(sourceUrl) +
+            " refererHost=" + headerHost(headers, "Referer") +
+            " originHost=" + headerHost(headers, "Origin") +
+            " headers[cookie=" + hasCookie + ",auth=" + hasAuth + ",origin=" + hasOrigin +
+            ",referer=" + hasReferer + ",ua=" + hasUa + "] route=" + (alloha ? "DIRECT_ALLOHA" : "LOCAL_PROXY"));
+        if (alloha) return sourceUrl;
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
-            android.util.Log.i("RuFilmTV", "Media3 stream routed through LocalStreamProxy: " +
-                Uri.parse(sourceUrl).getHost());
+            android.util.Log.i("RuFilmTV-DIAG", "LocalStreamProxy started for " + diagnosticUrl(sourceUrl));
             return proxyUrl;
         } catch (Exception e) {
-            android.util.Log.e("RuFilmTV", "LocalStreamProxy startup failed; trying direct Media3 URL", e);
+            android.util.Log.e("RuFilmTV-DIAG", "LocalStreamProxy startup failed type=" + e.getClass().getName());
             return sourceUrl;
         }
     }
