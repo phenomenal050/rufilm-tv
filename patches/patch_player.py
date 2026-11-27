@@ -204,26 +204,29 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                         capturedMediaUrl=null; capturedMediaAt=0L; capturedMediaPriority=0;
                         mxOfferFallbackScheduled=false;
                     }
-                    if("2".equals(type)||"3".equals(type)) {
+                    if("2".equals(type)) {
                         capturedOkVideoUrl=url; capturedMediaUrl=url; capturedMediaHeaders=safeHeaders;
                         capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
                         capturedMediaUserAgent=userAgent;
-                        android.util.Log.i("RuFilmTV","Captured OK video track session="+sessionKey+" id="+id+" type="+type);
-                    } else if("4".equals(type)) {
+                        android.util.Log.i("RuFilmTV","Captured OK video track session="+sessionKey+" id="+id+" type=2");
+                    } else if("3".equals(type)||"4".equals(type)) {
                         capturedOkAudioUrl=url;
-                        android.util.Log.i("RuFilmTV","Captured OK audio track session="+sessionKey+" id="+id+" type=4");
+                        android.util.Log.i("RuFilmTV","Captured OK audio track session="+sessionKey+" id="+id+" type="+type);
                     } else {
                         android.util.Log.w("RuFilmTV","Unsupported OK track type="+type+" session="+sessionKey);
                     }
-                } else if("2".equals(type)||"3".equals(type)) {
+                } else if("2".equals(type)) {
                     // Without a stable video-session key, keep the video standalone; never pair it with stale audio.
                     capturedOkSessionKey=null; capturedOkVideoUrl=null; capturedOkAudioUrl=null;
                     capturedMediaUrl=url; capturedMediaHeaders=safeHeaders;
                     capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
                     capturedMediaUserAgent=userAgent;
                     android.util.Log.i("RuFilmTV","Captured unpaired OK video track id="+id+" type="+type);
+                } else if("3".equals(type)||"4".equals(type)) {
+                    android.util.Log.w("RuFilmTV","Ignored unpaired OK audio track id="+id+" type="+type+" (no session key)");
+                    return;
                 } else {
-                    android.util.Log.w("RuFilmTV","Ignored unpaired OK audio track id="+id);
+                    android.util.Log.w("RuFilmTV","Unsupported OK track type="+type+" id="+id);
                     return;
                 }
                 capturedMediaAt=now; capturedMediaPriority=4;
