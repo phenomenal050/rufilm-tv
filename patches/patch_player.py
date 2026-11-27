@@ -200,6 +200,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         int priority = playlist ? 3 : 1;
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
+            if (capturedOkId != null) {
+                capturedOkId = null; capturedOkVideoUrl = null; capturedOkAudioUrl = null;
+                capturedMediaPriority = 0;
+                android.util.Log.i("RuFilmTV-DIAG", "Cleared previous OK.ru session before non-OK media capture");
+            }
             if (capturedMediaUrl == null || now - capturedMediaAt > 15000L || priority >= capturedMediaPriority) {
                 capturedMediaUrl = url;
                 capturedMediaReferer = (referer == null || referer.isEmpty()) ? BASE + "/" : referer;
@@ -235,7 +240,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
             // OK.ru exposes a one-second stub.mp4 before its signed A/V tracks.
             // Never launch Media3 for an OK session until both fresh tracks exist.
-            if (capturedOkId != null && (capturedOkVideoUrl == null || capturedOkAudioUrl == null)) {
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) {
                 android.util.Log.i("RuFilmTV", "Waiting for complete OK.ru A/V pair id=" + capturedOkId +
                     " video=" + (capturedOkVideoUrl != null) + " audio=" + (capturedOkAudioUrl != null));
                 return;
@@ -302,6 +307,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         int priority = (lower.contains(".m3u8") || lower.contains(".mpd")) ? 3 : 1;
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
+            if (capturedOkId != null) {
+                capturedOkId = null; capturedOkVideoUrl = null; capturedOkAudioUrl = null;
+                capturedMediaPriority = 0;
+                android.util.Log.i("RuFilmTV-DIAG", "Cleared previous OK.ru session before non-OK JS capture");
+            }
             boolean sameUrl = rawUrl.equals(capturedMediaUrl);
             boolean stale = capturedMediaUrl == null || now - capturedMediaAt > 15000L;
             if (sameUrl) {
@@ -354,8 +364,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             long now = System.currentTimeMillis();
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
-            if (capturedOkId != null && (capturedOkVideoUrl == null || capturedOkAudioUrl == null)) {
-                android.util.Log.w("RuFilmTV", "Refusing incomplete OK.ru A/V handoff id=" + capturedOkId);
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) {
+                android.util.Log.w("RuFilmTV", "Waiting for OK.ru audio track before Media3 handoff");
                 return false;
             }
             if (capturedOkVideoUrl != null && capturedOkAudioUrl != null) {
@@ -481,7 +491,7 @@ episode_support = r'''
             "el.style.minHeight='40px';el.style.fontSize='16px';}}" +
             "function installMxOffer(){var docs=[];try{document.addEventListener('click',function(e){var f=e.target&&e.target.closest?e.target.closest('iframe'):null;if(f&&/vk|alloha|stravers/i.test(f.src||'')){try{var z=window.RuFilmPlayer;if(z&&z.armMxPlayIntent)z.armMxPlayIntent();}catch(q){}}},true);}catch(q){}function collect(w,depth){if(depth>5)return;try{var d=w.document;if(d&&docs.indexOf(d)<0)docs.push(d);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],depth+1);}catch(e){}}catch(e){}}" +
             "function bindDoc(d){try{var w=d.defaultView||window;[].slice.call(d.querySelectorAll('video')).forEach(function(v){if(v.__rufilmMxOfferHook)return;v.__rufilmMxOfferHook=true;v.__rufilmMxOfferShown=false;" +
-            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.armMxPlayIntent)b.armMxPlayIntent();if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));}}catch(e){}},true);" +
+            "v.addEventListener('play',function(){if(v.__rufilmMxOfferShown)return;v.__rufilmMxOfferShown=true;try{var b=w.RuFilmPlayer||window.RuFilmPlayer;if(b){if(b.captureMxMedia)b.captureMxMedia(String(v.currentSrc||v.src||''),String(w.location.href||location.href),String(w.navigator.userAgent||navigator.userAgent));if(b.armMxPlayIntent)b.armMxPlayIntent();}}catch(e){}},true);" +
             "v.addEventListener('emptied',function(){v.__rufilmMxOfferShown=false;});});if(!d.__rufilmMxOfferObserver&&d.documentElement){d.__rufilmMxOfferObserver=new MutationObserver(function(){bindDoc(d);});d.__rufilmMxOfferObserver.observe(d.documentElement,{childList:true,subtree:true});}}catch(e){}}" +
             "collect(window,0);docs.forEach(bindDoc);}" +
             "installMxOffer();mark();if(!window.__rufilmTvDpadObserver&&document.documentElement){" +
