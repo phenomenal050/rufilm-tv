@@ -22,7 +22,9 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private Map<String, String> capturedMediaHeaders = new HashMap<>();
     private String capturedOkVideoUrl = null;
     private String capturedOkAudioUrl = null;
-    private String capturedOkId = null;
+    private String capturedOkSessionKey = null;
+    private boolean mxOfferFallbackScheduled = false;
+    private long mxOfferGeneration = 0L;
     private long capturedMediaAt = 0L;
     private int capturedMediaPriority = 0; // HLS/DASH manifests outrank individual MP4 fragments.
     private long lastNativePlayerLaunchAt = 0L;
@@ -132,7 +134,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             Uri u=Uri.parse(rawUrl); String h=u.getHost();
             return h!=null&&h.toLowerCase(Locale.ROOT).endsWith(".vkuser.net")&&
                 u.getQueryParameter("bytes")!=null&&u.getQueryParameter("sig")!=null&&u.getQueryParameter("id")!=null&&
-                ("2".equals(u.getQueryParameter("type"))||"3".equals(u.getQueryParameter("type")));
+                ("2".equals(u.getQueryParameter("type"))||"3".equals(u.getQueryParameter("type"))||"4".equals(u.getQueryParameter("type")));
         } catch(Exception ignored){return false;}
     }
 
@@ -173,19 +175,58 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         }
         if (okChunk) {
             Uri u=Uri.parse(url); String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");
+            String sessionKey=null;
+            try {
+                Uri refUri=referer==null?null:Uri.parse(referer);
+                String path=refUri==null?null:refUri.getPath();
+                if(path!=null) {
+                    String normalized=path;
+                    int marker=normalized.toLowerCase(Locale.ROOT).indexOf("/video/");
+                    if(marker<0) marker=normalized.toLowerCase(Locale.ROOT).indexOf("/videoembed/");
+                    if(marker>=0) {
+                        String tail=normalized.substring(marker+(normalized.toLowerCase(Locale.ROOT).startsWith("/videoembed/",marker)?12:7));
+                        int slash=tail.indexOf('/'); if(slash>=0) tail=tail.substring(0,slash);
+                        int query=tail.indexOf('?'); if(query>=0) tail=tail.substring(0,query);
+                        if(!tail.isEmpty()) sessionKey="video:"+tail;
+                    }
+                }
+            } catch(Exception ignored) {}
+            if(sessionKey==null||sessionKey.isEmpty()) {
+                String mid=u.getQueryParameter("mid");
+                if(mid!=null&&!mid.isEmpty()) sessionKey="mid:"+mid;
+            }
             long now=System.currentTimeMillis();
             synchronized(mediaCaptureLock) {
-                if(capturedOkId==null||!capturedOkId.equals(id)){capturedOkId=id;capturedOkVideoUrl=null;capturedOkAudioUrl=null;}
-                if("2".equals(type)){
-                    capturedOkVideoUrl=url;capturedMediaUrl=url;capturedMediaHeaders=safeHeaders;
+                if(sessionKey!=null) {
+                    if(capturedOkSessionKey==null||!capturedOkSessionKey.equals(sessionKey)) {
+                        capturedOkSessionKey=sessionKey;
+                        capturedOkVideoUrl=null; capturedOkAudioUrl=null;
+                        capturedMediaUrl=null; capturedMediaAt=0L; capturedMediaPriority=0;
+                        mxOfferFallbackScheduled=false;
+                    }
+                    if("2".equals(type)||"3".equals(type)) {
+                        capturedOkVideoUrl=url; capturedMediaUrl=url; capturedMediaHeaders=safeHeaders;
+                        capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
+                        capturedMediaUserAgent=userAgent;
+                        android.util.Log.i("RuFilmTV","Captured OK video track session="+sessionKey+" id="+id+" type="+type);
+                    } else if("4".equals(type)) {
+                        capturedOkAudioUrl=url;
+                        android.util.Log.i("RuFilmTV","Captured OK audio track session="+sessionKey+" id="+id+" type=4");
+                    } else {
+                        android.util.Log.w("RuFilmTV","Unsupported OK track type="+type+" session="+sessionKey);
+                    }
+                } else if("2".equals(type)||"3".equals(type)) {
+                    // Without a stable video-session key, keep the video standalone; never pair it with stale audio.
+                    capturedOkSessionKey=null; capturedOkVideoUrl=null; capturedOkAudioUrl=null;
+                    capturedMediaUrl=url; capturedMediaHeaders=safeHeaders;
                     capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
                     capturedMediaUserAgent=userAgent;
-                    android.util.Log.i("RuFilmTV","Captured OK video track id="+id);
-                }else if("3".equals(type)){
-                    capturedOkAudioUrl=url;
-                    android.util.Log.i("RuFilmTV","Captured OK audio track id="+id);
+                    android.util.Log.i("RuFilmTV","Captured unpaired OK video track id="+id+" type="+type);
+                } else {
+                    android.util.Log.w("RuFilmTV","Ignored unpaired OK audio track id="+id);
+                    return;
                 }
-                capturedMediaAt=now;capturedMediaPriority=4;
+                capturedMediaAt=now; capturedMediaPriority=4;
                 if(mxPlayIntentUntil>now)mxPlayIntentUntil=now+60000L;
             }
             maybeOfferMxPlayer(0L);
@@ -220,6 +261,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private void armMxPlayIntent() {
         mxPlayIntentUntil = System.currentTimeMillis() + 60000L;
         mxOfferTriggered = false;
+        mxOfferFallbackScheduled = false;
+        mxOfferGeneration++;
         maybeOfferMxPlayer(0L);
     }
 
@@ -227,7 +270,33 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
-            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) return;
+            if (capturedOkSessionKey != null && capturedOkVideoUrl == null) return;
+            if (capturedOkSessionKey != null && capturedOkAudioUrl == null) {
+                if (!mxOfferFallbackScheduled) {
+                    mxOfferFallbackScheduled = true;
+                    final String expectedSession = capturedOkSessionKey;
+                    final long expectedGeneration = mxOfferGeneration;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        boolean launchVideoOnly = false;
+                        synchronized (mediaCaptureLock) {
+                            mxOfferFallbackScheduled = false;
+                            if (expectedGeneration != mxOfferGeneration || mxOfferTriggered ||
+                                    System.currentTimeMillis() > mxPlayIntentUntil ||
+                                    !expectedSession.equals(capturedOkSessionKey) || capturedOkVideoUrl == null)
+                                return;
+                            if (capturedOkAudioUrl == null) {
+                                mxOfferTriggered = true;
+                                launchVideoOnly = true;
+                            }
+                        }
+                        if (launchVideoOnly) {
+                            android.util.Log.w("RuFilmTV", "OK audio track not captured in time; launching current video track only");
+                            offerMxPlayer(positionMs);
+                        }
+                    }, 2500L);
+                }
+                return;
+            }
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);

@@ -347,11 +347,11 @@ public class NativePlayerActivity extends Activity {
         if (audioRawUrl != null && (audioRawUrl.startsWith("https://") || audioRawUrl.startsWith("http://"))) {
             String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers);
             String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers);
-            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
-            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).setMimeType("audio/mp4").build();
+            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).build();
+            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).build();
             ProgressiveMediaSource.Factory pf = new ProgressiveMediaSource.Factory(new DefaultDataSource.Factory(this, httpFactory));
             player.setMediaSource(new MergingMediaSource(pf.createMediaSource(videoItem), pf.createMediaSource(audioItem)));
-            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks");
+            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks; container formats detected from stream");
         } else {
             String playbackUrl = createPlaybackUrl(rawUrl, headers);
             MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
