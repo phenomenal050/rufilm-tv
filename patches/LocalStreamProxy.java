@@ -347,7 +347,7 @@ public final class LocalStreamProxy {
             return host != null && host.toLowerCase(Locale.ROOT).endsWith(".vkuser.net") &&
                 u.getQueryParameter("bytes") != null && u.getQueryParameter("sig") != null &&
                 u.getQueryParameter("id") != null &&
-                ("2".equals(u.getQueryParameter("type")) || "3".equals(u.getQueryParameter("type")));
+                ("2".equals(u.getQueryParameter("type")) || "3".equals(u.getQueryParameter("type")) || "4".equals(u.getQueryParameter("type")));
         } catch (Exception ignored) { return false; }
     }
     private static String withOkBytes(String target, long start, long end) throws IOException {
