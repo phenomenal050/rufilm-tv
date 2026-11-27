@@ -589,12 +589,17 @@ bridge_fields = '''
         if (a == null || a.web == null) return;
         final long syncPositionMs = positionMs;
         a.runOnUiThread(() -> {
-            String js = "(function(){function collect(w,a,n){if(n>5)return;try{a.push(w.document);for(var i=0;i<w.frames.length;i++)try{collect(w.frames[i],a,n+1);}catch(e){}}catch(e){}}var docs=[];collect(window,docs,0);(function send(w,n){if(n>6)return;try{w.postMessage({__rufilmStopOriginal:true},\\\"*\\\");for(var i=0;i<w.frames.length;i++)send(w.frames[i],n+1);}catch(e){}})(window,0);window.__rufilmOriginalSuspended=true;function notifyFrames(){try{var fs=document.querySelectorAll('iframe,frame');for(var i=0;i<fs.length;i++){var f=fs[i];if(!f.__rufilmStopBound){f.__rufilmStopBound=true;f.addEventListener('load',function(){try{this.contentWindow.postMessage({__rufilmStopOriginal:true},'*');}catch(e){}});}try{f.contentWindow.postMessage({__rufilmStopOriginal:true},'*');}catch(e){}}}catch(e){}}notifyFrames();if(!window.__rufilmFrameObserver&&document.documentElement){window.__rufilmFrameObserver=new MutationObserver(notifyFrames);window.__rufilmFrameObserver.observe(document.documentElement,{childList:true,subtree:true});}var t=" + (syncPositionMs > 0L ? syncPositionMs/1000.0 : -1.0) + ";docs.forEach(function(d){try{var w=d.defaultView||window,z=w.__rufilmSavedPlayerLayout,v=(z&&z.video)||w.__rufilmActiveVideo;if(!v)return;if(" + nativeActive + "){w.__rufilmNativeActive=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>2){try{v.currentTime=t;}catch(e){}}v.muted=true;v.volume=0;v.style.opacity='0';v.style.pointerEvents='none';try{v.pause();}catch(e){}return;}w.__rufilmNativeActive=false;var done=false;function keepOriginalStopped(){try{v.pause();v.muted=true;v.volume=0;v.style.opacity='0';v.style.visibility='hidden';v.style.pointerEvents='none';v.style.display='none';}catch(e){}}if(!v.__rufilmStopGuard){v.__rufilmStopGuard=true;v.addEventListener('play',function(){keepOriginalStopped();},true);v.addEventListener('playing',function(){keepOriginalStopped();},true);try{var originalPlay=v.play.bind(v);v.play=function(){keepOriginalStopped();return Promise.reject(new DOMException('Original player is suspended','AbortError'));};}catch(e){}}function finishSeek(){if(done)return;done=true;if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.currentTime=t;}catch(e){}}keepOriginalStopped();[150,350,700,1100,1800,3000].forEach(function(ms){setTimeout(keepOriginalStopped,ms);});}function seek(){if(t>=0&&isFinite(t)&&Math.abs(v.currentTime-t)>1.25){try{v.addEventListener('seeked',finishSeek,{once:true});v.currentTime=t;}catch(e){}}setTimeout(finishSeek,500);}if(v.readyState>=1)seek();else{v.addEventListener('loadedmetadata',seek,{once:true});setTimeout(seek,900);}}catch(e){}});return true;})()";
-            android.util.Log.i("RuFilmTV", "Restore original VK playback at " + syncPositionMs + " ms; nativeActive=" + nativeActive);
+            double seconds = syncPositionMs > 0L ? syncPositionMs / 1000.0 : -1.0;
+            String js = "(function(){var active=" + nativeActive + ";var t=" + seconds +
+                ";window.__rufilmNativeActive=active;window.__rufilmOriginalSuspended=active;window.__rufilmNativePosition=t;" +
+                "var msg=active?{__rufilmStopOriginal:true,__rufilmPosition:t}:{__rufilmResumeOriginal:true,__rufilmPosition:t};" +
+                "function send(w,n){if(n>6)return;try{w.postMessage(msg,'*');for(var i=0;i<w.frames.length;i++)send(w.frames[i],n+1);}catch(e){}}" +
+                "send(window,0);return true;})()";
+            android.util.Log.i("RuFilmTV", "Sync original VK player at " + syncPositionMs +
+                " ms; nativeActive=" + nativeActive);
             a.web.evaluateJavascript(js, null);
         });
-    }
-'''
+    }'''
 once('    private final Object mediaCaptureLock = new Object();', bridge_fields + '    private final Object mediaCaptureLock = new Object();', 'native callbacks')
 if 'rufilmActiveInstance = this;' not in s:
     on_create = re.search(r'((?:public|protected|private)\s+void\s+onCreate\s*\([^)]*\)\s*\{)', s)
