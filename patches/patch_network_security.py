@@ -14,10 +14,10 @@ if not match:
 tag = match.group(0)
 
 def set_attr(tag, name, value):
-    pattern = rf'\\b{re.escape(name)}\\s*=\\s*("[^"]*"|\\'[^\\']*\\')'
+    pattern = r"\\b" + re.escape(name) + r'\\s*=\\s*("[^"]*"|\\'[^\\']*\\')'
     if re.search(pattern, tag):
-        return re.sub(pattern, f'{name}="{value}"', tag, count=1)
-    return tag[:-1] + f' {name}="{value}">'
+        return re.sub(pattern, lambda _: name + '="' + value + '"', tag, count=1)
+    return tag[:-1] + ' ' + name + '="' + value + '">'
 
 tag = set_attr(tag, "android:networkSecurityConfig", "@xml/rufilm_network_security_config")
 tag = set_attr(tag, "android:usesCleartextTraffic", "false")
