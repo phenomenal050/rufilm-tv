@@ -1435,6 +1435,49 @@ if not proxy_source.exists():
     raise SystemExit("LocalStreamProxy.java is missing from patches/")
 (p.parent / "LocalStreamProxy.java").write_text(proxy_source.read_text(encoding="utf-8"), encoding="utf-8")
 
+# Safe playback diagnostics: record capture source, URL host/path and header presence only.
+once('''        if (okChunk) {
+            Uri u=Uri.parse(url); String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");''',
+     '''        String capturePath = request.getUrl().getPath();
+        String captureHost = request.getUrl().getHost();
+        String refererHost = "none";
+        try { if (referer != null) refererHost = Uri.parse(referer).getHost(); } catch (Exception ignored) {}
+        android.util.Log.i("RuFilmTV-DIAG", "Media capture source=WEBVIEW_REQUEST url=" +
+            captureHost + (capturePath == null ? "" : capturePath) + " refererHost=" + refererHost +
+            " headers[cookie=" + safeHeaders.containsKey("Cookie") +
+            ",auth=" + safeHeaders.containsKey("Authorization") +
+            ",origin=" + safeHeaders.containsKey("Origin") +
+            ",referer=" + safeHeaders.containsKey("Referer") +
+            ",ua=" + (userAgent != null && !userAgent.isEmpty()) + "]");
+        if (okChunk) {
+            Uri u=Uri.parse(url); String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");''',
+     "WebView media capture diagnostics")
+once('''        if (okChunk) {
+            Uri u=Uri.parse(rawUrl);
+            String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");''',
+     '''        String jsPath = Uri.parse(rawUrl).getPath();
+        String jsHost = Uri.parse(rawUrl).getHost();
+        String jsRefererHost = "none";
+        try { if (referer != null) jsRefererHost = Uri.parse(referer).getHost(); } catch (Exception ignored) {}
+        android.util.Log.i("RuFilmTV-DIAG", "Media capture source=JAVASCRIPT url=" +
+            jsHost + (jsPath == null ? "" : jsPath) + " refererHost=" + jsRefererHost +
+            " headers[cookie=" + headers.containsKey("Cookie") +
+            ",origin=" + headers.containsKey("Origin") +
+            ",referer=" + headers.containsKey("Referer") +
+            ",ua=" + headers.containsKey("User-Agent") + "]");
+        if (okChunk) {
+            Uri u=Uri.parse(rawUrl);
+            String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");''',
+     "JavaScript media capture diagnostics")
+once('''    private void armMxPlayIntent() {
+        mxPlayIntentUntil = System.currentTimeMillis() + 60000L;''',
+     '''    private void armMxPlayIntent() {
+        android.util.Log.i("RuFilmTV-DIAG", "Play intent armed; previous capture ageMs=" +
+            (capturedMediaAt == 0L ? -1L : System.currentTimeMillis() - capturedMediaAt) +
+            " captured=" + (capturedMediaUrl != null));
+        mxPlayIntentUntil = System.currentTimeMillis() + 60000L;''',
+     "Play intent timing diagnostics")
+
 p.write_text(s, encoding="utf-8")
 print("Patched", p)
 # Rebuild trigger after native assistant controls fix.
