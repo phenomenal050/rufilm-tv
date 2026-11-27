@@ -646,6 +646,7 @@ public class NativePlayerActivity extends Activity {
             if (playerView != null) playerView.setPlayer(null);
             player.release(); player = null;
         }
+        LocalStreamProxy.stop();
     }
     @Override public void onBackPressed() { releasePlayer(); super.onBackPressed(); }
 }

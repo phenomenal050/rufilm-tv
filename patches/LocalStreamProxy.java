@@ -18,6 +18,8 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Collections;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -39,6 +41,7 @@ public final class LocalStreamProxy {
     private static volatile String sessionToken;
     private static volatile int localPort;
     private static volatile Map<String, String> sessionHeaders = new ConcurrentHashMap<>();
+    private static final Set<Socket> activeClients = Collections.newSetFromMap(new ConcurrentHashMap<Socket, Boolean>());
 
     private LocalStreamProxy() {}
 
@@ -59,10 +62,35 @@ public final class LocalStreamProxy {
         return makeProxyUrl(sourceUrl);
     }
 
+    /**
+     * Ends the current Media3 proxy session. Closing active loopback clients
+     * prevents a previous signed audio/video request from leaking into the
+     * next playback session.
+     */
+    public static synchronized void stop() {
+        ServerSocket oldServer = server;
+        server = null;
+        Thread oldAcceptThread = acceptThread;
+        acceptThread = null;
+        sessionToken = null;
+        localPort = 0;
+        sessionHeaders.clear();
+        for (Socket client : activeClients.toArray(new Socket[0])) {
+            try { client.close(); } catch (IOException ignored) { }
+        }
+        activeClients.clear();
+        if (oldServer != null) {
+            try { oldServer.close(); } catch (IOException ignored) { }
+        }
+        if (oldAcceptThread != null) oldAcceptThread.interrupt();
+        Log.i(TAG, "Media proxy session stopped; server, headers and active clients cleared");
+    }
+
     private static void acceptLoop(ServerSocket socket) {
         while (!socket.isClosed()) {
             try {
                 Socket client = socket.accept();
+                activeClients.add(client);
                 client.setSoTimeout(30000);
                 Thread worker = new Thread(() -> handle(client), "RuFilmTV-ProxyClient");
                 worker.setDaemon(true);
@@ -250,6 +278,7 @@ public final class LocalStreamProxy {
             try { writeError(client.getOutputStream(), 502, "Bad Gateway"); } catch (Exception ignored) {}
         } finally {
             if (upstream != null) upstream.disconnect();
+            activeClients.remove(client);
         }
     }
 
