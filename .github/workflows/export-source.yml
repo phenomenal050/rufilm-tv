@@ -1,0 +1,22 @@
+name: Export RuFilmTV base source
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/export-source.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract project
+        run: unzip -o RuFilmTV-3.0.0-project.zip -d .
+      - name: Export MainActivity
+        run: cp rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java "$RUNNER_TEMP/MainActivity.java"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RuFilmTV-source-inspection
+          path: ${{ runner.temp }}/MainActivity.java
+          if-no-files-found: error

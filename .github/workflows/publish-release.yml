@@ -1,0 +1,164 @@
+name: Publish RuFilmTV GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
+        required: true
+        default: "v3.1.0"
+        type: string
+  push:
+    branches: [main, beta]
+    paths:
+      - 'RuFilmTV-3.0.0-project.zip'
+      - 'patches/**'
+      - '.github/workflows/publish-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate and load persistent signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" || { echo "::error::Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "::error::Missing ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "::error::Missing ANDROID_KEY_PASSWORD"; exit 1; }
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rufilm-release.jks"
+          test -s "$RUNNER_TEMP/rufilm-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/rufilm-release.jks" -storetype JKS -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/rufilm-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "Persistent RuFilmTV signing key validated."
+
+      - name: Resolve and validate release version
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' patches/app-build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' patches/app-build.gradle.kts | head -n 1)"
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="v$VERSION_NAME"
+          fi
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] || { echo "::error::Release tag must look like v3.1.0 or v3.1.0-beta.1"; exit 1; }
+          TAG_VERSION="${TAG#v}"
+          test "$TAG_VERSION" = "$VERSION_NAME" || {
+            echo "::error::Tag $TAG does not match Gradle versionName $VERSION_NAME"; exit 1;
+          }
+          if [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+            echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "RELEASE_APK_NAME=RuFilmTV-$VERSION_NAME.apk" >> "$GITHUB_ENV"
+          echo "Publishing $TAG (versionCode $VERSION_CODE)."
+          echo "Source commit: $GITHUB_SHA"
+
+      - name: Extract RuFilmTV project
+        run: unzip -o RuFilmTV-3.0.0-project.zip -d .
+
+      - name: Restrict cleartext traffic to the local Media3 proxy
+        run: python3 patches/patch_network_security.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Install branding and updater support
+        run: |
+          python3 -m pip install --quiet pillow cairosvg
+          python3 patches/brand_tv.py
+          python3 patches/update_support.py
+          install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
+          install -D patches/LocalStreamProxy.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java
+          install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
+          install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
+          python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_vk_clickthrough.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_vk_diagnostics.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_webview_inspector.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+          python3 patches/patch_video_fullscreen_button.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
+
+      - name: Build signed release APK
+        working-directory: rufilm-tv-2.9
+        run: gradle --no-daemon assembleRelease
+
+      - name: Verify package, version, signature and SHA-256
+        run: |
+          set -euo pipefail
+          APK="rufilm-tv-2.9/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          SRC="rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java"
+          grep -F 'new FrameLayout.LayoutParams(dp(104), dp(58), Gravity.TOP | Gravity.END)' "$SRC"
+          grep -F 'RuFilmMouse' "$SRC"
+          grep -F 'WebView.setWebContentsDebuggingEnabled(true)' "$SRC"
+          grep -F 'videoFullscreenButton=button("⛶",true)' "$SRC"
+          grep -F 'startMedia3FromFullscreenButton()' "$SRC"
+          grep -F 'armMxPlayIntent();' "$SRC"
+          grep -F 'RuFilmVK' "$SRC"
+          if grep -F 'fullscreenContainer.addView(fullscreenControls, new FrameLayout.LayoutParams(-1, -1))' "$SRC"; then echo "Fullscreen overlay must not cover VK controls"; exit 1; fi
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 1 | grep -F "name='tv.rufilm.app' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          mkdir -p "$RUNNER_TEMP/release"
+          cp "$APK" "$RUNNER_TEMP/release/$RELEASE_APK_NAME"
+          cd "$RUNNER_TEMP/release"
+          sha256sum "$RELEASE_APK_NAME" > "$RELEASE_APK_NAME.sha256"
+          echo "Signed APK and SHA-256 sidecar are ready."
+
+      - name: Publish GitHub Release with APK and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh auth status >/dev/null 2>&1; then
+            echo "::error::GitHub release token is unavailable."
+            exit 1
+          fi
+          RELEASE_ARGS=()
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            RELEASE_ARGS+=(--prerelease)
+            RELEASE_TITLE="RuFilmTV $RELEASE_VERSION — публичная тестовая сборка VK"
+            RELEASE_NOTES="Публичная тестовая сборка RuFilmTV. Предварительный канал; после проверки будет опубликована стабильная версия."
+          else
+            RELEASE_TITLE="RuFilmTV 3.1"
+            RELEASE_NOTES="Основной публичный стабильный релиз RuFilmTV 3.1. Сохранён оригинальный встроенный VK Video player, обновлятор и рекламная фильтрация. Релиз подписан постоянным ключом RuFilmTV."
+          fi
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release/$RELEASE_APK_NAME" \
+            "$RUNNER_TEMP/release/$RELEASE_APK_NAME.sha256" \
+            --title "$RELEASE_TITLE" \
+            --notes "$RELEASE_NOTES" \
+            --target "$GITHUB_SHA" \
+            "${RELEASE_ARGS[@]}"
