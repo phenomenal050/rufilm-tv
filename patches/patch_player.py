@@ -130,9 +130,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private boolean isOkChunkUrl(String rawUrl) {
         try {
             Uri u=Uri.parse(rawUrl); String h=u.getHost();
+            String type=u.getQueryParameter("type");
             return h!=null&&h.toLowerCase(Locale.ROOT).endsWith(".vkuser.net")&&
                 u.getQueryParameter("bytes")!=null&&u.getQueryParameter("sig")!=null&&u.getQueryParameter("id")!=null&&
-                ("2".equals(u.getQueryParameter("type"))||"3".equals(u.getQueryParameter("type")));
+                ("2".equals(type)||"3".equals(type)||"4".equals(type));
         } catch(Exception ignored){return false;}
     }
 
@@ -186,9 +187,9 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                     capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
                     capturedMediaUserAgent=userAgent;
                     android.util.Log.i("RuFilmTV","Captured OK video track id="+id);
-                }else if("3".equals(type)){
+                }else if("3".equals(type)||"4".equals(type)){
                     capturedOkAudioUrl=url;
-                    android.util.Log.i("RuFilmTV","Captured OK audio track id="+id);
+                    android.util.Log.i("RuFilmTV","Captured OK audio track id="+id+" type="+type);
                 }
                 capturedMediaAt=now;capturedMediaPriority=4;
                 if(mxPlayIntentUntil>now)mxPlayIntentUntil=now+60000L;
@@ -252,8 +253,9 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             android.util.Log.i("RuFilmTV", "Ignored JS-discovered OK.ru placeholder video stub.mp4");
             return;
         }
+        boolean okChunk = isOkChunkUrl(rawUrl);
         if (!(lower.contains(".m3u8") || lower.contains(".mpd") || lower.contains(".mp4") ||
-                lower.contains(".m4v") || lower.contains(".webm"))) return;
+                lower.contains(".m4v") || lower.contains(".webm") || okChunk)) return;
         if (isAdRequest(rawUrl) && !isRuFilmMediaRequest(rawUrl)) return;
         // JS/WebSocket discovery is useful for finding a URL, but the actual
         // WebView request is authoritative for authentication headers. Never let
@@ -271,6 +273,32 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             String cookie = android.webkit.CookieManager.getInstance().getCookie(rawUrl);
             if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
         } catch (Exception ignored) { }
+        if (okChunk) {
+            Uri u=Uri.parse(rawUrl);
+            String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");
+            long now=System.currentTimeMillis();
+            synchronized(mediaCaptureLock) {
+                if(capturedOkId==null||!capturedOkId.equals(id)) {
+                    capturedOkId=id; capturedOkVideoUrl=null; capturedOkAudioUrl=null;
+                }
+                if("2".equals(type)) {
+                    capturedOkVideoUrl=rawUrl; capturedMediaUrl=rawUrl; capturedMediaHeaders=headers;
+                    capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
+                    capturedMediaUserAgent=userAgent;
+                    android.util.Log.i("RuFilmTV","Captured JS-discovered OK video track id="+id);
+                } else if("3".equals(type)||"4".equals(type)) {
+                    capturedOkAudioUrl=rawUrl;
+                    android.util.Log.i("RuFilmTV","Captured JS-discovered OK audio track id="+id+" type="+type);
+                } else {
+                    android.util.Log.w("RuFilmTV","Ignored unsupported JS-discovered OK track type="+type);
+                    return;
+                }
+                capturedMediaAt=now; capturedMediaPriority=4;
+                if(mxPlayIntentUntil>now)mxPlayIntentUntil=now+60000L;
+            }
+            maybeOfferMxPlayer(0L);
+            return;
+        }
         int priority = (lower.contains(".m3u8") || lower.contains(".mpd")) ? 3 : 1;
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
