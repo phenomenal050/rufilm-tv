@@ -162,8 +162,24 @@ public final class LocalStreamProxy {
             String type = upstream.getContentType();
             try {
                 URL effective = upstream.getURL();
-                Log.i(TAG, method + " " + (effective == null ? "upstream" : effective.getHost()) +
-                        " -> HTTP " + status + (type == null ? "" : " (" + type + ")"));
+                String host = effective == null ? "upstream" : effective.getHost();
+                Log.i(TAG, method + " " + host + " -> HTTP " + status +
+                        (type == null ? "" : " (" + type + ")"));
+                if (status >= 400) {
+                    String refererHost = "none";
+                    String originHost = "none";
+                    try {
+                        String referer = upstream.getRequestProperty("Referer");
+                        if (referer != null) refererHost = new URL(referer).getHost();
+                    } catch (Exception ignored) { }
+                    try {
+                        String origin = upstream.getRequestProperty("Origin");
+                        if (origin != null) originHost = new URL(origin).getHost();
+                    } catch (Exception ignored) { }
+                    Log.e(TAG, "Upstream rejected request: HTTP " + status +
+                            " host=" + host + " refererHost=" + refererHost +
+                            " originHost=" + originHost + " method=" + method);
+                }
             } catch (Exception ignored) { }
             String lowerTarget = target.toLowerCase(Locale.ROOT);
             boolean manifest = lowerTarget.contains(".m3u8") || lowerTarget.contains(".mpd") ||
