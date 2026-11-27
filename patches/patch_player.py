@@ -24,8 +24,6 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private String capturedOkAudioUrl = null;
     private String capturedOkId = null;
     private long capturedMediaAt = 0L;
-    private long capturedOkVideoAt = 0L;
-    private long capturedOkAudioAt = 0L;
     private int capturedMediaPriority = 0; // HLS/DASH manifests outrank individual MP4 fragments.
     private long lastNativePlayerLaunchAt = 0L;
     private boolean nativePlayerLaunching = false;''', "media fields")
@@ -177,27 +175,14 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             Uri u=Uri.parse(url); String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");
             long now=System.currentTimeMillis();
             synchronized(mediaCaptureLock) {
-                if(capturedOkId==null||!capturedOkId.equals(id)){
-                    capturedOkId=id;capturedOkVideoUrl=null;capturedOkAudioUrl=null;
-                    capturedOkVideoAt=0L;capturedOkAudioAt=0L;
-                    capturedMediaUrl=null;capturedMediaAt=0L;
-                }
+                if(capturedOkId==null||!capturedOkId.equals(id)){capturedOkId=id;capturedOkVideoUrl=null;capturedOkAudioUrl=null;}
                 if("2".equals(type)){
-                    // Pair only tracks observed in the same short capture window.
-                    // This prevents a previous play's signed audio URL being reused.
-                    if(capturedOkAudioAt==0L||now-capturedOkAudioAt>10000L){
-                        capturedOkAudioUrl=null;capturedOkAudioAt=0L;
-                    }
-                    capturedOkVideoUrl=url;capturedOkVideoAt=now;
-                    capturedMediaUrl=url;capturedMediaHeaders=safeHeaders;
+                    capturedOkVideoUrl=url;capturedMediaUrl=url;capturedMediaHeaders=safeHeaders;
                     capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
                     capturedMediaUserAgent=userAgent;
                     android.util.Log.i("RuFilmTV","Captured OK video track id="+id);
                 }else if("3".equals(type)){
-                    if(capturedOkVideoAt==0L||now-capturedOkVideoAt>10000L){
-                        capturedOkVideoUrl=null;capturedOkVideoAt=0L;capturedMediaUrl=null;
-                    }
-                    capturedOkAudioUrl=url;capturedOkAudioAt=now;
+                    capturedOkAudioUrl=url;
                     android.util.Log.i("RuFilmTV","Captured OK audio track id="+id);
                 }
                 capturedMediaAt=now;capturedMediaPriority=4;
@@ -242,9 +227,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
-            if (capturedOkId != null &&
-                    (capturedOkVideoUrl == null || capturedOkAudioUrl == null ||
-                     Math.abs(capturedOkVideoAt - capturedOkAudioAt) > 10000L)) return;
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) return;
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -327,9 +310,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             long now = System.currentTimeMillis();
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
-            if (capturedOkId != null) {
-                if (capturedOkVideoUrl == null || capturedOkAudioUrl == null ||
-                        Math.abs(capturedOkVideoAt - capturedOkAudioAt) > 10000L) return false;
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl != null) {
                 url = capturedOkVideoUrl; audioUrl = capturedOkAudioUrl;
             } else { url = capturedMediaUrl; audioUrl = null; }
             referer = capturedMediaReferer;
