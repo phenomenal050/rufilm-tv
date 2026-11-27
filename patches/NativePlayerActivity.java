@@ -429,7 +429,29 @@ public class NativePlayerActivity extends Activity {
     // Route native playback through the authenticated loopback bridge. HLS/DASH
     // manifests are rewritten so every child playlist, segment and key receives
     // the correct host-scoped cookies and the captured WebView request headers.
+    private boolean isAllohaStream(String sourceUrl, Map<String, String> headers) {
+        // Alloha's media endpoints are often hosted on unrelated CDN domains.
+        // The iframe page URL is captured as Referer, so use it as the provider
+        // signal rather than guessing from the CDN hostname.
+        String referer = "";
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                if (entry.getKey() != null && "referer".equalsIgnoreCase(entry.getKey())) {
+                    referer = entry.getValue() == null ? "" : entry.getValue();
+                    break;
+                }
+            }
+        }
+        String candidate = ((sourceUrl == null ? "" : sourceUrl) + " " + referer)
+            .toLowerCase(Locale.ROOT);
+        return candidate.contains("alloha");
+    }
+
     private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
+        if (isAllohaStream(sourceUrl, headers)) {
+            android.util.Log.i("RuFilmTV", "Alloha stream: bypassing LocalStreamProxy; using direct Media3 request");
+            return sourceUrl;
+        }
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
             android.util.Log.i("RuFilmTV", "Media3 stream routed through LocalStreamProxy: " +
