@@ -553,7 +553,7 @@ public class NativePlayerActivity extends Activity {
             .setReadTimeoutMs(45000)
             .setDefaultRequestProperties(headers);
         DefaultMediaSourceFactory factory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, httpFactory));
-        String playbackUrl = createPlaybackUrl(url, headers);
+        String playbackUrl = createPlaybackUrl(url, headers, false);
         MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
         String lower = url.toLowerCase(Locale.ROOT);
         if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
