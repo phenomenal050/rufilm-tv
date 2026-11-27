@@ -426,10 +426,34 @@ public class NativePlayerActivity extends Activity {
         scheduleAssistantHide();
     }
 
-    // Route native playback through the authenticated loopback bridge. HLS/DASH
-    // manifests are rewritten so every child playlist, segment and key receives
-    // the correct host-scoped cookies and the captured WebView request headers.
+    // Alloha was working in beta.30 with Media3 reading its original URL and
+    // the WebView-captured Referer/Origin/Cookie headers. Keep that direct path
+    // for Alloha; OK.ru and VK continue through the beta.59 authenticated proxy.
+    private boolean isAllohaPlayback(String sourceUrl, Map<String, String> headers) {
+        String referer = currentReferer == null ? "" : currentReferer;
+        String origin = "";
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                if (entry.getKey() == null) continue;
+                if ("referer".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null)
+                    referer = entry.getValue();
+                else if ("origin".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null)
+                    origin = entry.getValue();
+            }
+        }
+        String context = (referer + " " + origin + " " + (sourceUrl == null ? "" : sourceUrl))
+            .toLowerCase(Locale.ROOT);
+        return context.contains("alloha") || context.contains("stravers");
+    }
+
+    // Route OK.ru/VK through the beta.59 authenticated loopback bridge.
+    // Alloha stays direct, exactly as in the beta.30 working implementation.
     private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
+        if (isAllohaPlayback(sourceUrl, headers)) {
+            android.util.Log.i("RuFilmTV", "Alloha Media3 direct handoff; Referer=" +
+                (currentReferer == null ? "captured" : Uri.parse(currentReferer).getHost()));
+            return sourceUrl;
+        }
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
             android.util.Log.i("RuFilmTV", "Media3 stream routed through LocalStreamProxy: " +
