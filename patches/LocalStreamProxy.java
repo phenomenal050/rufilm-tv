@@ -287,7 +287,7 @@ public final class LocalStreamProxy {
                 .replace("%24RepresentationID%24", "$RepresentationID$")
                 .replace("%24Bandwidth%24", "$Bandwidth$")
                 .replace("%24SubNumber%24", "$SubNumber$");
-        return "http://localhost:" + localPort + "/" + sessionToken + "?u=" + encoded;
+        return "http://127.0.0.1:" + localPort + "/" + sessionToken + "?u=" + encoded;
     }
 
     private static byte[] readLimited(InputStream in, int limit) throws IOException {
