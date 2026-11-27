@@ -29,6 +29,7 @@ resource.write_text("""<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>
 </network-security-config>
@@ -37,4 +38,4 @@ resource.write_text("""<?xml version="1.0" encoding="utf-8"?>
 ET.parse(manifest)
 ET.parse(resource)
 assert 'android:networkSecurityConfig="@xml/rufilm_network_security_config"' in manifest.read_text(encoding="utf-8")
-print("Network security configured: cleartext permitted only for 127.0.0.1.")
+print("Network security configured: cleartext permitted only for localhost loopback.")
