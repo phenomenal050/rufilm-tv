@@ -71,7 +71,8 @@ java = r"""
                 "function send(u,k){try{if(!u||!(u.indexOf('https://')===0||u.indexOf('http://')===0))return;" +
                 "var x=u.toLowerCase(),ok=false;['.m3u8','.mpd','.mp4','.m4v','.webm'].forEach(function(e){" +
                 "var p=x.indexOf(e);if(p>=0&&(p+e.length===x.length||['?','&','#'].indexOf(x.charAt(p+e.length))>=0))ok=true;});" +
-                "if(!ok)return;var o=window.RuFilmCapture;if(o&&o.postMessage)o.postMessage(JSON.stringify({" +
+                "var okChunk=/^https?:\\/\\/[^/]*\\.vkuser\\.net\\/\\?(?=[^#]*[?&]bytes=)(?=[^#]*[?&]sig=)(?=[^#]*[?&]id=)(?=[^#]*[?&]type=[234](?:&|#|$))/.test(x);" +
+                "if(!ok&&!okChunk)return;var o=window.RuFilmCapture;if(o&&o.postMessage)o.postMessage(JSON.stringify({" +
                 "url:u,referer:String(location.href||''),userAgent:String(navigator.userAgent||''),kind:k||'frame'}));" +
                 "}catch(e){}}" +
                 "function walk(v,d,k){if(d>4||v==null)return;if(typeof v==='string'){extract(v,k,d+1);return;}" +
