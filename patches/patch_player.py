@@ -142,6 +142,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
                 !"GET".equalsIgnoreCase(request.getMethod())) return;
         String url = request.getUrl().toString();
         String lower = url.toLowerCase(Locale.ROOT);
+        String mediaPath = request.getUrl().getPath();
+        if (mediaPath != null && mediaPath.toLowerCase(Locale.ROOT).endsWith("/stub.mp4")) {
+            android.util.Log.i("RuFilmTV", "Ignored OK.ru placeholder video stub.mp4");
+            return;
+        }
         boolean playlist = lower.contains(".m3u8") || lower.contains(".mpd");
         boolean directVideo = lower.contains(".mp4") || lower.contains(".m4v") || lower.contains(".webm");
         boolean okChunk = isOkChunkUrl(url);
@@ -227,7 +232,13 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
-            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) return;
+            // OK.ru exposes a one-second stub.mp4 before its signed A/V tracks.
+            // Never launch Media3 for an OK session until both fresh tracks exist.
+            if (capturedOkId != null && (capturedOkVideoUrl == null || capturedOkAudioUrl == null)) {
+                android.util.Log.i("RuFilmTV", "Waiting for complete OK.ru A/V pair id=" + capturedOkId +
+                    " video=" + (capturedOkVideoUrl != null) + " audio=" + (capturedOkAudioUrl != null));
+                return;
+            }
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -236,6 +247,11 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     private void captureMxMedia(String rawUrl, String referer, String userAgent) {
         if (rawUrl == null || !(rawUrl.startsWith("https://") || rawUrl.startsWith("http://"))) return;
         String lower = rawUrl.toLowerCase(Locale.ROOT);
+        String mediaPath = Uri.parse(rawUrl).getPath();
+        if (mediaPath != null && mediaPath.toLowerCase(Locale.ROOT).endsWith("/stub.mp4")) {
+            android.util.Log.i("RuFilmTV", "Ignored JS-discovered OK.ru placeholder video stub.mp4");
+            return;
+        }
         if (!(lower.contains(".m3u8") || lower.contains(".mpd") || lower.contains(".mp4") ||
                 lower.contains(".m4v") || lower.contains(".webm"))) return;
         if (isAdRequest(rawUrl) && !isRuFilmMediaRequest(rawUrl)) return;
@@ -310,6 +326,10 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             long now = System.currentTimeMillis();
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
+            if (capturedOkId != null && (capturedOkVideoUrl == null || capturedOkAudioUrl == null)) {
+                android.util.Log.w("RuFilmTV", "Refusing incomplete OK.ru A/V handoff id=" + capturedOkId);
+                return false;
+            }
             if (capturedOkVideoUrl != null && capturedOkAudioUrl != null) {
                 url = capturedOkVideoUrl; audioUrl = capturedOkAudioUrl;
             } else { url = capturedMediaUrl; audioUrl = null; }
