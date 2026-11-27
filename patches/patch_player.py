@@ -594,6 +594,7 @@ bridge_fields = '''
                 ";window.__rufilmNativeActive=active;window.__rufilmOriginalSuspended=active;window.__rufilmNativePosition=t;" +
                 "var msg=active?{__rufilmStopOriginal:true,__rufilmPosition:t}:{__rufilmResumeOriginal:true,__rufilmPosition:t};" +
                 "function send(w,n){if(n>6)return;try{w.postMessage(msg,'*');for(var i=0;i<w.frames.length;i++)send(w.frames[i],n+1);}catch(e){}}" +
+                "if(!window.__rufilmFrameObserver&&document.documentElement){window.__rufilmFrameObserver=new MutationObserver(function(){var active=!!window.__rufilmNativeActive,p=window.__rufilmNativePosition,m=active?{__rufilmStopOriginal:true,__rufilmPosition:p}:{__rufilmResumeOriginal:true,__rufilmPosition:p},fs=document.querySelectorAll('iframe,frame');for(var i=0;i<fs.length;i++)try{fs[i].contentWindow.postMessage(m,'*');}catch(e){}});window.__rufilmFrameObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
                 "send(window,0);return true;})()";
             android.util.Log.i("RuFilmTV", "Sync original VK player at " + syncPositionMs +
                 " ms; nativeActive=" + nativeActive);
