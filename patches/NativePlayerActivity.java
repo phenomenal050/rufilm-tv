@@ -344,7 +344,7 @@ public class NativePlayerActivity extends Activity {
         showAssistantControls();
 
         String audioRawUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
-        if (audioRawUrl != null && audioRawUrl.startsWith("https://")) {
+        if (audioRawUrl != null && (audioRawUrl.startsWith("https://") || audioRawUrl.startsWith("http://"))) {
             String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers);
             String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers);
             MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
@@ -405,6 +405,19 @@ public class NativePlayerActivity extends Activity {
             }
             @Override public void onTracksChanged(androidx.media3.common.Tracks tracks) {
                 if (qualityButton != null) qualityButton.setEnabled(hasVideoTracks());
+                for (androidx.media3.common.Tracks.Group group : tracks.getGroups()) {
+                    androidx.media3.common.TrackGroup mediaGroup = group.getMediaTrackGroup();
+                    for (int i = 0; i < mediaGroup.length; i++) {
+                        Format format = mediaGroup.getFormat(i);
+                        android.util.Log.i("RuFilmTV-AudioDiag", "track type=" + group.getType() +
+                            " supported=" + group.isTrackSupported(i) +
+                            " selected=" + group.isTrackSelected(i) +
+                            " mime=" + format.sampleMimeType +
+                            " language=" + format.language +
+                            " channels=" + format.channelCount +
+                            " sampleRate=" + format.sampleRate);
+                    }
+                }
             }
         });
         player.prepare();
