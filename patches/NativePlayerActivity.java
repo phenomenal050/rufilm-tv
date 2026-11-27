@@ -345,15 +345,15 @@ public class NativePlayerActivity extends Activity {
 
         String audioRawUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
         if (audioRawUrl != null && (audioRawUrl.startsWith("https://") || audioRawUrl.startsWith("http://"))) {
-            String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers);
-            String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers);
+            String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers, true);
+            String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers, true);
             MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
             MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).setMimeType("audio/mp4").build();
             ProgressiveMediaSource.Factory pf = new ProgressiveMediaSource.Factory(new DefaultDataSource.Factory(this, httpFactory));
             player.setMediaSource(new MergingMediaSource(pf.createMediaSource(videoItem), pf.createMediaSource(audioItem)));
             android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks");
         } else {
-            String playbackUrl = createPlaybackUrl(rawUrl, headers);
+            String playbackUrl = createPlaybackUrl(rawUrl, headers, false);
             MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
             String lower = rawUrl.toLowerCase(Locale.ROOT);
             if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
@@ -485,29 +485,20 @@ public class NativePlayerActivity extends Activity {
 
     // Route OK.ru/VK through the beta.59 authenticated loopback bridge.
     // Alloha stays direct, exactly as in the beta.30 working implementation.
-    private String createPlaybackUrl(String sourceUrl, Map<String, String> headers) {
-        boolean alloha = isAllohaPlayback(sourceUrl, headers);
-        boolean hasCookie = false, hasAuth = false, hasOrigin = false, hasReferer = false, hasUa = false;
-        if (headers != null) for (String key : headers.keySet()) {
-            if (key == null) continue;
-            if ("cookie".equalsIgnoreCase(key)) hasCookie = true;
-            else if ("authorization".equalsIgnoreCase(key)) hasAuth = true;
-            else if ("origin".equalsIgnoreCase(key)) hasOrigin = true;
-            else if ("referer".equalsIgnoreCase(key)) hasReferer = true;
-            else if ("user-agent".equalsIgnoreCase(key)) hasUa = true;
-        }
-        android.util.Log.i("RuFilmTV-DIAG", "Media3 handoff source=" + diagnosticUrl(sourceUrl) +
+    // beta.30 used direct Media3 for VK and Alloha; beta.59's authenticated
+    // proxy is required only for OK.ru's separate signed audio/video chunks.
+    private String createPlaybackUrl(String sourceUrl, Map<String, String> headers, boolean useOkProxy) {
+        android.util.Log.i("RuFilmTV-DIAG", "Media3 route=" + (useOkProxy ? "OK_LOCAL_PROXY" : "DIRECT_BETA30") +
+            " source=" + diagnosticUrl(sourceUrl) +
             " refererHost=" + headerHost(headers, "Referer") +
-            " originHost=" + headerHost(headers, "Origin") +
-            " headers[cookie=" + hasCookie + ",auth=" + hasAuth + ",origin=" + hasOrigin +
-            ",referer=" + hasReferer + ",ua=" + hasUa + "] route=" + (alloha ? "DIRECT_ALLOHA" : "LOCAL_PROXY"));
-        if (alloha) return sourceUrl;
+            " originHost=" + headerHost(headers, "Origin"));
+        if (!useOkProxy) return sourceUrl;
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
-            android.util.Log.i("RuFilmTV-DIAG", "LocalStreamProxy started for " + diagnosticUrl(sourceUrl));
+            android.util.Log.i("RuFilmTV-DIAG", "OK LocalStreamProxy started for " + diagnosticUrl(sourceUrl));
             return proxyUrl;
         } catch (Exception e) {
-            android.util.Log.e("RuFilmTV-DIAG", "LocalStreamProxy startup failed type=" + e.getClass().getName());
+            android.util.Log.e("RuFilmTV-DIAG", "OK LocalStreamProxy startup failed type=" + e.getClass().getName());
             return sourceUrl;
         }
     }
