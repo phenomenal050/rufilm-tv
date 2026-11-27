@@ -18,8 +18,6 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Collections;
-import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -41,7 +39,6 @@ public final class LocalStreamProxy {
     private static volatile String sessionToken;
     private static volatile int localPort;
     private static volatile Map<String, String> sessionHeaders = new ConcurrentHashMap<>();
-    private static final Set<Socket> activeClients = Collections.newSetFromMap(new ConcurrentHashMap<Socket, Boolean>());
 
     private LocalStreamProxy() {}
 
@@ -62,35 +59,10 @@ public final class LocalStreamProxy {
         return makeProxyUrl(sourceUrl);
     }
 
-    /**
-     * Ends the current Media3 proxy session. Closing active loopback clients
-     * prevents a previous signed audio/video request from leaking into the
-     * next playback session.
-     */
-    public static synchronized void stop() {
-        ServerSocket oldServer = server;
-        server = null;
-        Thread oldAcceptThread = acceptThread;
-        acceptThread = null;
-        sessionToken = null;
-        localPort = 0;
-        sessionHeaders.clear();
-        for (Socket client : activeClients.toArray(new Socket[0])) {
-            try { client.close(); } catch (IOException ignored) { }
-        }
-        activeClients.clear();
-        if (oldServer != null) {
-            try { oldServer.close(); } catch (IOException ignored) { }
-        }
-        if (oldAcceptThread != null) oldAcceptThread.interrupt();
-        Log.i(TAG, "Media proxy session stopped; server, headers and active clients cleared");
-    }
-
     private static void acceptLoop(ServerSocket socket) {
         while (!socket.isClosed()) {
             try {
                 Socket client = socket.accept();
-                activeClients.add(client);
                 client.setSoTimeout(30000);
                 Thread worker = new Thread(() -> handle(client), "RuFilmTV-ProxyClient");
                 worker.setDaemon(true);
@@ -103,7 +75,6 @@ public final class LocalStreamProxy {
 
     private static void handle(Socket client) {
         HttpURLConnection upstream = null;
-        String diagnosticTargetHost = "unknown";
         try (Socket socket = client;
              BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
              BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream())) {
@@ -138,22 +109,8 @@ public final class LocalStreamProxy {
             }
             String target = local.getQueryParameter("u");
             if (target == null || !(target.startsWith("http://") || target.startsWith("https://"))) {
-                Log.e(TAG, "DIAG invalid upstream target received by local proxy");
                 writeError(output, 400, "Invalid upstream URL"); return;
             }
-            try { diagnosticTargetHost = new URL(target).getHost(); } catch (Exception ignored) { }
-            boolean shCookie=false, shAuth=false, shOrigin=false, shReferer=false, shUa=false;
-            for (String key : sessionHeaders.keySet()) {
-                if (key == null) continue;
-                if ("cookie".equalsIgnoreCase(key)) shCookie=true;
-                else if ("authorization".equalsIgnoreCase(key)) shAuth=true;
-                else if ("origin".equalsIgnoreCase(key)) shOrigin=true;
-                else if ("referer".equalsIgnoreCase(key)) shReferer=true;
-                else if ("user-agent".equalsIgnoreCase(key)) shUa=true;
-            }
-            Log.i(TAG, "DIAG local request method=" + method + " targetHost=" + diagnosticTargetHost +
-                    " range=" + incoming.containsKey("range") + " sessionHeaders[cookie=" + shCookie +
-                    ",auth=" + shAuth + ",origin=" + shOrigin + ",referer=" + shReferer + ",ua=" + shUa + "]");
             // OK/VK CDN delivers signed MP4 tracks as byte windows encoded in
             // the URL query. Present those windows as one continuous file to Media3.
             if ("GET".equals(method) && isOkChunkUrl(target) &&
@@ -206,10 +163,8 @@ public final class LocalStreamProxy {
             try {
                 URL effective = upstream.getURL();
                 String host = effective == null ? "upstream" : effective.getHost();
-                Log.i(TAG, "DIAG upstream " + method + " " + host + " -> HTTP " + status +
-                        " contentType=" + (type == null ? "none" : type) +
-                        " contentLength=" + upstream.getHeaderField("Content-Length") +
-                        " acceptRanges=" + upstream.getHeaderField("Accept-Ranges"));
+                Log.i(TAG, method + " " + host + " -> HTTP " + status +
+                        (type == null ? "" : " (" + type + ")"));
                 if (status >= 400) {
                     String refererHost = "none";
                     String originHost = "none";
@@ -291,12 +246,10 @@ public final class LocalStreamProxy {
             }
             output.flush();
         } catch (Exception e) {
-            Log.e(TAG, "DIAG proxy request failed targetHost=" + diagnosticTargetHost +
-                    " errorClass=" + e.getClass().getName());
+            Log.w(TAG, "Proxy request failed", e);
             try { writeError(client.getOutputStream(), 502, "Bad Gateway"); } catch (Exception ignored) {}
         } finally {
             if (upstream != null) upstream.disconnect();
-            activeClients.remove(client);
         }
     }
 
@@ -394,7 +347,7 @@ public final class LocalStreamProxy {
             return host != null && host.toLowerCase(Locale.ROOT).endsWith(".vkuser.net") &&
                 u.getQueryParameter("bytes") != null && u.getQueryParameter("sig") != null &&
                 u.getQueryParameter("id") != null &&
-                ("2".equals(u.getQueryParameter("type")) || "3".equals(u.getQueryParameter("type")) || "4".equals(u.getQueryParameter("type")));
+                ("2".equals(u.getQueryParameter("type")) || "3".equals(u.getQueryParameter("type")));
         } catch (Exception ignored) { return false; }
     }
     private static String withOkBytes(String target, long start, long end) throws IOException {
@@ -445,9 +398,6 @@ public final class LocalStreamProxy {
         try{
             long askEnd=end>=0?end:start+OK_CHUNK_SIZE-1L;
             current=openOkChunk(target,start,askEnd); int code=current.getResponseCode();
-            Log.i(TAG, "DIAG OK chunk upstream HTTP " + code + " host=" + current.getURL().getHost() +
-                    " contentRange=" + current.getHeaderField("Content-Range") +
-                    " contentType=" + current.getContentType());
             long[] win=parseOkContentRange(current.getHeaderField("Content-Range"));
             if(code<200||code>=300||win==null||win[0]!=start){current.disconnect();return false;}
             long total=win[2]; if(start>=total){current.disconnect();writeError(output,416,"Range Not Satisfiable");return true;}
