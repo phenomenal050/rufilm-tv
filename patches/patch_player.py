@@ -20,6 +20,9 @@ once('    private boolean externalLaunchPending = false;', '''    private boolea
     private String capturedMediaReferer = null;
     private String capturedMediaUserAgent = null;
     private Map<String, String> capturedMediaHeaders = new HashMap<>();
+    private String capturedOkVideoUrl = null;
+    private String capturedOkAudioUrl = null;
+    private String capturedOkId = null;
     private long capturedMediaAt = 0L;
     private int capturedMediaPriority = 0; // HLS/DASH manifests outrank individual MP4 fragments.
     private long lastNativePlayerLaunchAt = 0L;
@@ -124,6 +127,15 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         web.evaluateJavascript(js, null);
     }
 
+    private boolean isOkChunkUrl(String rawUrl) {
+        try {
+            Uri u=Uri.parse(rawUrl); String h=u.getHost();
+            return h!=null&&h.toLowerCase(Locale.ROOT).endsWith(".vkuser.net")&&
+                u.getQueryParameter("bytes")!=null&&u.getQueryParameter("sig")!=null&&u.getQueryParameter("id")!=null&&
+                ("2".equals(u.getQueryParameter("type"))||"3".equals(u.getQueryParameter("type")));
+        } catch(Exception ignored){return false;}
+    }
+
     // Capture HLS/DASH manifests and the request headers used by the WebView.
     private void captureMediaRequest(WebResourceRequest request) {
         if (request == null || request.getUrl() == null ||
@@ -132,7 +144,8 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         String lower = url.toLowerCase(Locale.ROOT);
         boolean playlist = lower.contains(".m3u8") || lower.contains(".mpd");
         boolean directVideo = lower.contains(".mp4") || lower.contains(".m4v") || lower.contains(".webm");
-        if (!(playlist || directVideo) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
+        boolean okChunk = isOkChunkUrl(url);
+        if (!(playlist || directVideo || okChunk) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
         saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
         Map<String, String> safeHeaders = new HashMap<>();
@@ -157,6 +170,26 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         } catch (Exception ignored) { }
         if ((userAgent == null || userAgent.isEmpty()) && web != null) {
             try { userAgent = web.getSettings().getUserAgentString(); } catch (Exception ignored) { }
+        }
+        if (okChunk) {
+            Uri u=Uri.parse(url); String id=u.getQueryParameter("id"), type=u.getQueryParameter("type");
+            long now=System.currentTimeMillis();
+            synchronized(mediaCaptureLock) {
+                if(capturedOkId==null||!capturedOkId.equals(id)){capturedOkId=id;capturedOkVideoUrl=null;capturedOkAudioUrl=null;}
+                if("2".equals(type)){
+                    capturedOkVideoUrl=url;capturedMediaUrl=url;capturedMediaHeaders=safeHeaders;
+                    capturedMediaReferer=(referer==null||referer.isEmpty())?BASE+"/":referer;
+                    capturedMediaUserAgent=userAgent;
+                    android.util.Log.i("RuFilmTV","Captured OK video track id="+id);
+                }else if("3".equals(type)){
+                    capturedOkAudioUrl=url;
+                    android.util.Log.i("RuFilmTV","Captured OK audio track id="+id);
+                }
+                capturedMediaAt=now;capturedMediaPriority=4;
+                if(mxPlayIntentUntil>now)mxPlayIntentUntil=now+60000L;
+            }
+            maybeOfferMxPlayer(0L);
+            return;
         }
         int priority = playlist ? 3 : 1;
         synchronized (mediaCaptureLock) {
@@ -185,7 +218,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
 
     // Arm a short capture window after a deliberate Play/fullscreen gesture.
     private void armMxPlayIntent() {
-        mxPlayIntentUntil = System.currentTimeMillis() + 15000L;
+        mxPlayIntentUntil = System.currentTimeMillis() + 60000L;
         mxOfferTriggered = false;
         maybeOfferMxPlayer(0L);
     }
@@ -194,6 +227,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         if (System.currentTimeMillis() > mxPlayIntentUntil || mxOfferTriggered) return;
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) return;
         }
         mxOfferTriggered = true;
         offerMxPlayer(positionMs);
@@ -270,13 +304,15 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
     }
 
     private boolean launchCapturedMedia() {
-        final String url, referer, userAgent;
+        final String url, referer, userAgent, audioUrl;
         final HashMap<String, String> headers;
         synchronized (mediaCaptureLock) {
             long now = System.currentTimeMillis();
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
-            url = capturedMediaUrl;
+            if (capturedOkVideoUrl != null && capturedOkAudioUrl != null) {
+                url = capturedOkVideoUrl; audioUrl = capturedOkAudioUrl;
+            } else { url = capturedMediaUrl; audioUrl = null; }
             referer = capturedMediaReferer;
             userAgent = capturedMediaUserAgent;
             headers = new HashMap<>(capturedMediaHeaders);
@@ -287,6 +323,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             try {
                 Intent intent = new Intent(MainActivity.this, NativePlayerActivity.class);
                 intent.putExtra(NativePlayerActivity.EXTRA_URL, url);
+                if (audioUrl != null) intent.putExtra(NativePlayerActivity.EXTRA_AUDIO_URL, audioUrl);
                 intent.putExtra(NativePlayerActivity.EXTRA_REFERER, referer);
                 intent.putExtra(NativePlayerActivity.EXTRA_USER_AGENT, userAgent);
                 intent.putExtra(NativePlayerActivity.EXTRA_HEADERS, headers);

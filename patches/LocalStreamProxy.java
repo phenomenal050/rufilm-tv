@@ -111,6 +111,10 @@ public final class LocalStreamProxy {
             if (target == null || !(target.startsWith("http://") || target.startsWith("https://"))) {
                 writeError(output, 400, "Invalid upstream URL"); return;
             }
+            // OK/VK CDN delivers signed MP4 tracks as byte windows encoded in
+            // the URL query. Present those windows as one continuous file to Media3.
+            if ("GET".equals(method) && isOkChunkUrl(target) &&
+                    handleOkChunkedMedia(target, incoming, output)) return;
 
             upstream = (HttpURLConnection) new URL(target).openConnection();
             upstream.setInstanceFollowRedirects(true);
@@ -317,6 +321,96 @@ public final class LocalStreamProxy {
     private static void copyHeader(HttpURLConnection source, OutputStream out, String name) throws IOException {
         String value = source.getHeaderField(name);
         if (value != null) writeAscii(out, name + ": " + value + "\r\n");
+    }
+
+
+    private static final long OK_CHUNK_SIZE = 1024L * 1024L;
+    private static boolean isOkChunkUrl(String target) {
+        try {
+            Uri u = Uri.parse(target); String host = u.getHost();
+            return host != null && host.toLowerCase(Locale.ROOT).endsWith(".vkuser.net") &&
+                u.getQueryParameter("bytes") != null && u.getQueryParameter("sig") != null &&
+                u.getQueryParameter("id") != null &&
+                ("2".equals(u.getQueryParameter("type")) || "3".equals(u.getQueryParameter("type")));
+        } catch (Exception ignored) { return false; }
+    }
+    private static String withOkBytes(String target, long start, long end) throws IOException {
+        Matcher m = Pattern.compile("([?&]bytes=)[^&]*").matcher(target);
+        if (!m.find()) throw new IOException("OK CDN URL has no bytes parameter");
+        return m.replaceFirst(Matcher.quoteReplacement(m.group(1) + start + "-" + end));
+    }
+    private static HttpURLConnection openOkChunk(String target, long start, long end) throws IOException {
+        String chunkUrl = withOkBytes(target, start, end);
+        HttpURLConnection c = (HttpURLConnection)new URL(chunkUrl).openConnection();
+        c.setInstanceFollowRedirects(true); c.setConnectTimeout(20000); c.setReadTimeout(90000);
+        c.setUseCaches(false); c.setRequestMethod("GET");
+        c.setRequestProperty("Connection", "close"); c.setRequestProperty("Accept-Encoding", "identity");
+        for (Map.Entry<String,String> h : sessionHeaders.entrySet()) {
+            String k=h.getKey(); if(k==null||h.getValue()==null)continue;
+            String l=k.toLowerCase(Locale.ROOT);
+            if(l.equals("host")||l.equals("connection")||l.equals("content-length")||
+               l.equals("accept-encoding")||l.equals("cookie")||l.equals("range"))continue;
+            c.setRequestProperty(k,h.getValue());
+        }
+        try {
+            String cookie=CookieManager.getInstance().getCookie(chunkUrl);
+            if(cookie!=null&&!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
+            else for(Map.Entry<String,String> h:sessionHeaders.entrySet())
+                if(h.getKey()!=null&&"cookie".equalsIgnoreCase(h.getKey()))c.setRequestProperty("Cookie",h.getValue());
+        } catch(Exception ignored) {}
+        return c;
+    }
+    private static long[] parseOkContentRange(String value) {
+        if(value==null)return null;
+        Matcher m=Pattern.compile("(?i)bytes\\s+(\\d+)-(\\d+)/(\\d+)").matcher(value.trim());
+        if(!m.matches())return null;
+        try{return new long[]{Long.parseLong(m.group(1)),Long.parseLong(m.group(2)),Long.parseLong(m.group(3))};}
+        catch(Exception ignored){return null;}
+    }
+    private static void copyOkBytes(InputStream in,OutputStream out,long count)throws IOException {
+        byte[] buffer=new byte[64*1024]; long left=count;
+        while(left>0){int n=in.read(buffer,0,(int)Math.min(buffer.length,left));
+            if(n<0)throw new IOException("OK CDN ended a byte window early");out.write(buffer,0,n);left-=n;}
+    }
+    private static boolean handleOkChunkedMedia(String target,Map<String,String> incoming,OutputStream output)throws IOException {
+        long start=0L,end=-1L; String range=incoming.get("range");
+        if(range!=null){Matcher rm=Pattern.compile("(?i)bytes=(\\d+)-(\\d*)").matcher(range.trim());
+            if(!rm.matches())return false;
+            try{start=Long.parseLong(rm.group(1));if(!rm.group(2).isEmpty())end=Long.parseLong(rm.group(2));}
+            catch(Exception ignored){return false;}}
+        HttpURLConnection current=null; boolean sent=false;
+        try{
+            long askEnd=end>=0?end:start+OK_CHUNK_SIZE-1L;
+            current=openOkChunk(target,start,askEnd); int code=current.getResponseCode();
+            long[] win=parseOkContentRange(current.getHeaderField("Content-Range"));
+            if(code<200||code>=300||win==null||win[0]!=start){current.disconnect();return false;}
+            long total=win[2]; if(start>=total){current.disconnect();writeError(output,416,"Range Not Satisfiable");return true;}
+            long finalEnd=end>=0?Math.min(end,total-1L):total-1L;
+            String type=current.getContentType(); int localStatus=range==null?200:206;
+            writeAscii(output,"HTTP/1.1 "+localStatus+(localStatus==206?" Partial Content":" OK")+"\r\n");
+            if(type!=null)writeAscii(output,"Content-Type: "+type+"\r\n");
+            writeAscii(output,"Accept-Ranges: bytes\r\nContent-Length: "+(finalEnd-start+1L)+"\r\n");
+            if(localStatus==206)writeAscii(output,"Content-Range: bytes "+start+"-"+finalEnd+"/"+total+"\r\n");
+            writeAscii(output,"Cache-Control: no-store\r\nConnection: close\r\n\r\n"); output.flush(); sent=true;
+            long cursor=start;
+            while(cursor<=finalEnd){
+                long chunkEnd=Math.min(win[1],finalEnd); InputStream body=current.getInputStream();
+                try{copyOkBytes(body,output,chunkEnd-cursor+1L);}
+                finally{try{body.close();}catch(Exception ignored){}current.disconnect();}
+                cursor=chunkEnd+1L;if(cursor>finalEnd)break;
+                long nextEnd=Math.min(cursor+OK_CHUNK_SIZE-1L,finalEnd);
+                current=openOkChunk(target,cursor,nextEnd);int nextCode=current.getResponseCode();
+                win=parseOkContentRange(current.getHeaderField("Content-Range"));
+                if(nextCode<200||nextCode>=300||win==null||win[0]!=cursor)
+                    throw new IOException("OK CDN rejected continuation at byte "+cursor+" HTTP "+nextCode);
+            }
+            output.flush();Log.i(TAG,"OK CDN virtual stream complete bytes="+(finalEnd-start+1L));
+            return true;
+        }catch(Exception e){
+            if(sent){Log.w(TAG,"OK CDN range continuation failed",e);try{output.flush();}catch(Exception ignored){}return true;}
+            if(current!=null)current.disconnect();
+            if(e instanceof IOException)throw(IOException)e;throw new IOException("OK CDN bridge failed",e);
+        }finally{if(current!=null)current.disconnect();}
     }
 
     private static void writeError(OutputStream out, int code, String reason) throws IOException {

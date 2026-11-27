@@ -23,6 +23,8 @@ import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.source.MergingMediaSource;
+import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.trackselection.MappingTrackSelector;
 import androidx.media3.datasource.DefaultDataSource;
@@ -40,6 +42,7 @@ import java.util.Map;
 
 public class NativePlayerActivity extends Activity {
     public static final String EXTRA_URL = "media_url";
+    public static final String EXTRA_AUDIO_URL = "media_audio_url";
     public static final String EXTRA_REFERER = "media_referer";
     public static final String EXTRA_USER_AGENT = "media_user_agent";
     public static final String EXTRA_HEADERS = "media_headers";
@@ -288,12 +291,23 @@ public class NativePlayerActivity extends Activity {
         setContentView(root);
         showAssistantControls();
 
-        String playbackUrl = createPlaybackUrl(rawUrl, headers);
-        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
-        String lower = rawUrl.toLowerCase(Locale.ROOT);
-        if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-        else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-        player.setMediaItem(item.build());
+        String audioRawUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
+        if (audioRawUrl != null && audioRawUrl.startsWith("https://")) {
+            String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers);
+            String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers);
+            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
+            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).setMimeType("audio/mp4").build();
+            ProgressiveMediaSource.Factory pf = new ProgressiveMediaSource.Factory(new DefaultDataSource.Factory(this, httpFactory));
+            player.setMediaSource(new MergingMediaSource(pf.createMediaSource(videoItem), pf.createMediaSource(audioItem)));
+            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks");
+        } else {
+            String playbackUrl = createPlaybackUrl(rawUrl, headers);
+            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
+            String lower = rawUrl.toLowerCase(Locale.ROOT);
+            if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
+            else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
+            player.setMediaItem(item.build());
+        }
         requestedStartPositionMs = Math.max(0L, getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L));
         android.util.Log.i("RuFilmTV", "Native handoff requested start position: " + requestedStartPositionMs + " ms");
         player.addListener(new Player.Listener() {
