@@ -717,9 +717,14 @@ public class NativePlayerActivity extends Activity {
                 oldPlayer.pause();
                 oldPlayer.stop();
                 oldPlayer.clearMediaItems();
-                oldPlayer.release();
             } catch (Exception e) {
-                android.util.Log.w("RuFilmTV", "Media3 cleanup failed", e);
+                android.util.Log.w("RuFilmTV", "Media3 stop/clear failed", e);
+            } finally {
+                try {
+                    oldPlayer.release();
+                } catch (Exception e) {
+                    android.util.Log.w("RuFilmTV", "Media3 release failed", e);
+                }
             }
         }
 
