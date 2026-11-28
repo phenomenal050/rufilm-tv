@@ -151,6 +151,16 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         boolean playlist = lower.contains(".m3u8") || lower.contains(".mpd");
         boolean directVideo = lower.contains(".mp4") || lower.contains(".m4v") || lower.contains(".webm");
         boolean okChunk = isOkChunkUrl(url);
+        Uri requestUri = request.getUrl();
+        String requestHost = requestUri.getHost();
+        if (requestHost != null && requestHost.toLowerCase(Locale.ROOT).endsWith(".vkuser.net")) {
+            android.util.Log.i("RuFilmTV-DIAG", "OK CDN request host=" + requestHost +
+                " type=" + requestUri.getQueryParameter("type") +
+                " bytes=" + (requestUri.getQueryParameter("bytes") != null) +
+                " sig=" + (requestUri.getQueryParameter("sig") != null) +
+                " id=" + (requestUri.getQueryParameter("id") != null) +
+                " recognized=" + okChunk);
+        }
         if (!(playlist || directVideo || okChunk) || (isAdRequest(url) && !isRuFilmMediaRequest(url))) return;
         saveOriginalPlayerLayout();
         Map<String, String> headers = request.getRequestHeaders();
@@ -480,8 +490,7 @@ episode_support = r'''
         final String script = "(function(){try{" +
             "var styleId='rufilm-tv-dpad-select-style';" +
             "if(!document.getElementById(styleId)){var st=document.createElement('style');st.id=styleId;" +
-            "st.textContent='select:focus{outline:3px solid #00dce8!important;outline-offset:2px!important;}' +" +
-            "select{min-height:40px;}';document.head.appendChild(st);}" +
+            "st.textContent='select:focus{outline:3px solid #00dce8!important;outline-offset:2px!important;}select{min-height:40px;}';document.head.appendChild(st);}" +
             "function mark(){var list=document.querySelectorAll('select');" +
             "for(var i=0;i<list.length;i++){var el=list[i];if(!el||!el.options||!el.options.length)continue;" +
             "el.setAttribute('tabindex','0');" +
@@ -564,12 +573,12 @@ premium_nav = r'''
         if (web == null) return;
         final String js = "(function(){try{" +
             "var wanted=['/films','/serials','/cartoon','/tv-show','/trailers'];" +
-            "function apply(){var links=[].slice.call(document.querySelectorAll('a[href]')).filter(function(a){try{var u=new URL(a.href,location.href);return u.origin===location.origin&&wanted.indexOf(u.pathname.replace(/\\\\/$/,''))>=0;}catch(e){return false;}});" +
+            "function apply(){var links=[].slice.call(document.querySelectorAll('a[href]')).filter(function(a){try{var u=new URL(a.href,location.href);return u.origin===location.origin&&wanted.indexOf(u.pathname.replace(/\\/$/,''))>=0;}catch(e){return false;}});" +
             "if(links.length<4)return;var candidates=links.map(function(a){return a.closest('nav,header,.menu,.navigation,.nav,ul');}).filter(Boolean);var root=null;" +
             "for(var i=0;i<candidates.length;i++){if(links.every(function(a){return candidates[i].contains(a);})){root=candidates[i];break;}}" +
             "if(!root)return;root.classList.add('rufilm-premium-topnav');var list=root.tagName==='UL'?root:root.querySelector('ul');if(list)list.classList.add('rufilm-premium-topnav-list');" +
             "links.forEach(function(a){a.classList.add('rufilm-premium-topnav-link');var li=a.closest('li');if(li)li.classList.add('rufilm-premium-topnav-item');});" +
-            "var current=location.pathname.replace(/\\\\/$/,'');links.forEach(function(a){try{var u=new URL(a.href,location.href);if(u.pathname.replace(/\\\\/$/,'')===current)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}catch(e){}});}" +
+            "var current=location.pathname.replace(/\\/$/,'');links.forEach(function(a){try{var u=new URL(a.href,location.href);if(u.pathname.replace(/\\/$/,'')===current)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}catch(e){}});}" +
             "var id='rufilm-premium-topnav-style';if(!document.getElementById(id)){var st=document.createElement('style');st.id=id;st.textContent='.rufilm-premium-topnav{position:sticky!important;top:0!important;z-index:10000!important;background:rgba(17,19,22,.97)!important;border-bottom:1px solid rgba(255,255,255,.09)!important;padding:7px 14px!important}.rufilm-premium-topnav-list{display:flex!important;align-items:center!important;gap:8px!important;flex-wrap:nowrap!important;overflow-x:auto!important;white-space:nowrap!important;scrollbar-width:none!important;margin:0!important;padding:0!important}.rufilm-premium-topnav-list::-webkit-scrollbar{display:none!important}.rufilm-premium-topnav-item{list-style:none!important;flex:0 0 auto!important;margin:0!important;padding:0!important}.rufilm-premium-topnav-link{display:inline-flex!important;align-items:center!important;min-height:38px!important;padding:0 13px!important;border-radius:9px!important;color:#dedee2!important;text-decoration:none!important;font-size:14px!important;font-weight:600!important;outline-offset:3px!important}.rufilm-premium-topnav-link:hover,.rufilm-premium-topnav-link:focus,.rufilm-premium-topnav-link[aria-current=page]{background:#d73445!important;color:#fff!important}.rufilm-premium-topnav-link:focus{outline:2px solid #fff!important}';(document.head||document.documentElement).appendChild(st);}" +
             "apply();if(!window.__rufilmPremiumNavObserver&&document.documentElement){var queued=false;window.__rufilmPremiumNavObserver=new MutationObserver(function(){if(queued)return;queued=true;setTimeout(function(){queued=false;apply();},200);});window.__rufilmPremiumNavObserver.observe(document.documentElement,{childList:true,subtree:true});}" +
             "}catch(e){}})();";
