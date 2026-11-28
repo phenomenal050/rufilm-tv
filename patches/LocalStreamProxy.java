@@ -450,7 +450,7 @@ public final class LocalStreamProxy {
             current=openOkChunk(target,start,askEnd); int code=current.getResponseCode();
             long[] win=parseOkContentRange(current.getHeaderField("Content-Range"));
             if(code<200||code>=300||win==null||win[0]!=start){disconnectTracked(current);return false;}
-            long total=win[2]; if(start>=total){current.disconnect();writeError(output,416,"Range Not Satisfiable");return true;}
+            long total=win[2]; if(start>=total){disconnectTracked(current);writeError(output,416,"Range Not Satisfiable");return true;}
             long finalEnd=end>=0?Math.min(end,total-1L):total-1L;
             String type=current.getContentType(); int localStatus=range==null?200:206;
             writeAscii(output,"HTTP/1.1 "+localStatus+(localStatus==206?" Partial Content":" OK")+"\r\n");
@@ -462,7 +462,7 @@ public final class LocalStreamProxy {
             while(cursor<=finalEnd){
                 long chunkEnd=Math.min(win[1],finalEnd); InputStream body=current.getInputStream();
                 try{copyOkBytes(body,output,chunkEnd-cursor+1L);}
-                finally{try{body.close();}catch(Exception ignored){}current.disconnect();}
+                finally{try{body.close();}catch(Exception ignored){}disconnectTracked(current);}
                 cursor=chunkEnd+1L;if(cursor>finalEnd)break;
                 long nextEnd=Math.min(cursor+OK_CHUNK_SIZE-1L,finalEnd);
                 current=openOkChunk(target,cursor,nextEnd);int nextCode=current.getResponseCode();
@@ -474,9 +474,9 @@ public final class LocalStreamProxy {
             return true;
         }catch(Exception e){
             if(sent){Log.w(TAG,"OK CDN range continuation failed",e);try{output.flush();}catch(Exception ignored){}return true;}
-            if(current!=null)current.disconnect();
+            if(current!=null)disconnectTracked(current);
             if(e instanceof IOException)throw(IOException)e;throw new IOException("OK CDN bridge failed",e);
-        }finally{if(current!=null)current.disconnect();}
+        }finally{if(current!=null)disconnectTracked(current);}
     }
 
     private static void writeError(OutputStream out, int code, String reason) throws IOException {
