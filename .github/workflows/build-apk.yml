@@ -4,7 +4,7 @@ name: Build RuFilmTV APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, beta, 'feature/public-test-channel', 'test/vk-diagnostics', 'fix/updater-channel-and-ad-filter-toggle', 'fix/vk-first-tap-layout-ad-target']
+    branches: [main, beta, 'experiment/mpv-beta79', 'feature/public-test-channel', 'test/vk-diagnostics', 'fix/updater-channel-and-ad-filter-toggle', 'fix/vk-first-tap-layout-ad-target']
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extract RuFilmTV project
         run: unzip -o RuFilmTV-3.0.0-project.zip -d .
-      - name: Restrict cleartext traffic to the local Media3 proxy
+      - name: Restrict cleartext traffic to the local MPV stream proxy
         run: python3 patches/patch_network_security.py
       - name: Export base MainActivity source for inspection
         run: cp rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java "$RUNNER_TEMP/MainActivity.java"
@@ -70,12 +70,14 @@ jobs:
           python3 -m pip install --quiet pillow cairosvg
           python3 patches/brand_tv.py
           python3 patches/update_support.py
-      - name: Apply verified Media3 compilation fixes
+      - name: Apply experimental MPV playback implementation
         run: |
-          install -D patches/NativePlayerActivity.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
+          rm -f rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.java
+          install -D patches/NativePlayerActivity.kt rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/NativePlayerActivity.kt
           install -D patches/LocalStreamProxy.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/LocalStreamProxy.java
           install -D patches/AppUpdateManager.java rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/AppUpdateManager.java
           install -D patches/app-build.gradle.kts rufilm-tv-2.9/app/build.gradle.kts
+          python3 patches/patch_mpv_gradle.py
           python3 patches/patch_player.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_vk_clickthrough.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
           python3 patches/patch_mx_crossframe.py rufilm-tv-2.9/app/src/main/java/tv/rufilm/app/MainActivity.java
@@ -120,7 +122,7 @@ jobs:
           grep -F 'function playerNode(e)' patches/patch_player.py
           grep -F 'restore();return;' patches/patch_player.py
           grep -F 'playerMode = "original"' patches/patch_player.py
-          grep -F 'Media3 is the only playback engine' patches/patch_player.py
+          grep -F 'MPV is the only playback engine' patches/patch_player.py
           grep -F 'MainActivity.this.armMxPlayIntent();' patches/patch_player.py
           grep -F 'launchCapturedMedia()' patches/patch_player.py
           grep -F 'try{v.pause();}catch(e){}' patches/patch_player.py
