@@ -54,7 +54,7 @@ dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.core:core:1.15.0")
     implementation("androidx.webkit:webkit:1.12.1")
-    implementation("io.github.yuroyami:libmpv-kmp-view:0.4.0")
+    implementation("io.github.yuroyami:libmpv-kmp-view:0.3.0")
 }
 
 // beta.69: reject OK.ru placeholder stream before Media3 handoff
