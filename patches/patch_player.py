@@ -686,15 +686,10 @@ if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
+        // Keep WebView focusable for Android TV DPAD, but do not request focus on touch.
+        // requestFocus() during ACTION_DOWN makes Chromium scroll focused catalogue items into view.
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
-        web.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.requestFocus();
-                // No touch-focus request: avoid scrolling the WebView to a focused page element.
-            }
-            return false;
-        });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21)
             android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
