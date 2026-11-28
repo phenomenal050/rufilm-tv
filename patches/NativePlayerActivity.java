@@ -5,38 +5,28 @@ import android.app.AlertDialog;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.FrameLayout;
-import android.widget.Toast;
 import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.media3.common.C;
-import androidx.media3.common.Format;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
-import androidx.media3.common.Player;
-import androidx.media3.common.TrackGroup;
-import androidx.media3.common.TrackSelectionOverride;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.DefaultRenderersFactory;
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.exoplayer.source.MergingMediaSource;
-import androidx.media3.exoplayer.source.ProgressiveMediaSource;
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
-import androidx.media3.exoplayer.trackselection.MappingTrackSelector;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
-import androidx.media3.ui.AspectRatioFrameLayout;
-import androidx.media3.ui.PlayerView;
+import org.videolan.libvlc.LibVLC;
+import org.videolan.libvlc.Media;
+import org.videolan.libvlc.MediaPlayer;
+import org.videolan.libvlc.interfaces.IMedia;
+import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 
@@ -49,56 +39,76 @@ public class NativePlayerActivity extends Activity {
     public static final String EXTRA_EPISODE_SELECTORS = "episode_selectors";
     public static final String EXTRA_START_POSITION_MS = "start_position_ms";
 
-    private ExoPlayer player;
-    private boolean fallbackToOriginalScheduled;
-    private PlayerView playerView;
-    private DefaultTrackSelector trackSelector;
-    private Button qualityButton;
-    private Button volumeButton;
-    private android.widget.SeekBar volumeSeekBar;
-    private float volumeBeforeMute = 1.0f;
-    private android.widget.SeekBar timelineSeek;
-    private android.widget.TextView currentTimeText, durationTimeText, playPauseButton;
-    private android.widget.TextView displayButton;
-    private android.widget.LinearLayout assistantControls, assistantTopBar;
+    private LibVLC libVLC;
+    private MediaPlayer player;
+    private VLCVideoLayout videoLayout;
+    private TextView currentTimeText, durationTimeText, playPauseButton;
+    private TextView volumeButton, zoomButton;
+    private SeekBar timelineSeek, volumeSeek;
+    private LinearLayout controls, topBar;
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean controlsVisible = true;
     private boolean zoomMode = false;
-    private final android.os.Handler assistantHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean startPositionApplied = false;
+    private boolean released = false;
+    private float volumeBeforeMute = 100f;
+    private long requestedStartPositionMs = 0L;
+    private long captureBaselineForSelection = 0L;
+    private String currentMediaUrl, currentReferer, currentUserAgent, currentAudioUrl;
+    private HashMap<String,String> currentHeaders = new HashMap<>();
+
     private final Runnable updateTimeline = new Runnable() {
         @Override public void run() {
-            if (player != null && timelineSeek != null) {
-                long duration = player.getDuration();
-                long position = player.getCurrentPosition();
-                if (duration > 0 && duration != C.TIME_UNSET) {
-                    if (!timelineSeek.isPressed()) timelineSeek.setProgress((int)Math.min(1000L, position * 1000L / duration));
-                    durationTimeText.setText(formatTime(duration));
-                }
-                currentTimeText.setText(formatTime(position));
-                playPauseButton.setText(player.isPlaying() ? "Ⅱ" : "▶");
-                assistantHandler.postDelayed(this, 500L);
+            if (player == null || released) return;
+            long duration = player.getLength();
+            long position = player.getTime();
+            if (duration > 0) {
+                if (timelineSeek != null && !timelineSeek.isPressed())
+                    timelineSeek.setProgress((int)Math.min(1000L, Math.max(0L, position) * 1000L / duration));
+                durationTimeText.setText(formatTime(duration));
             }
+            currentTimeText.setText(formatTime(Math.max(0L, position)));
+            playPauseButton.setText(player.isPlaying() ? "Ⅱ" : "▶");
+            handler.postDelayed(this, 500L);
         }
     };
 
-    private String currentMediaUrl;
-    private String currentReferer;
-    private String currentUserAgent;
-    private HashMap<String, String> currentHeaders = new HashMap<>();
-    private long captureBaselineForSelection = 0L;
-    private long requestedStartPositionMs = 0L;
-    private boolean startPositionApplied = false;
-    private final android.os.Handler syncHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable syncRunnable = new Runnable() { public void run() { if (player != null && !isFinishing()) { MainActivity.syncOriginalPlayback(player.getCurrentPosition(), true); syncHandler.postDelayed(this, 650L); } } };
-
-    private static class QualityOption {
-        final TrackGroup group;
-        final int trackIndex;
-        final int height;
-        QualityOption(TrackGroup group, int trackIndex, int height) {
-            this.group = group; this.trackIndex = trackIndex; this.height = height;
+    private final Runnable hideControls = () -> {
+        if (player != null && !released) {
+            controlsVisible = false;
+            controls.setVisibility(View.GONE);
+            topBar.setVisibility(View.GONE);
         }
-        String label() { return height > 0 ? height + "p" : "Неизвестно"; }
-    }
+    };
+
+    private final Runnable syncEpisode = new Runnable() {
+        @Override public void run() {
+            if (player == null || released || isFinishing()) return;
+            try {
+                org.json.JSONObject snapshot = new org.json.JSONObject(MainActivity.getCapturedMediaSnapshot());
+                long capturedAt = snapshot.optLong("capturedAt", 0L);
+                String updated = snapshot.optString("url", "");
+                if (capturedAt > captureBaselineForSelection && !updated.isEmpty() && !updated.equals(currentMediaUrl)) {
+                    HashMap<String,String> headers = new HashMap<>();
+                    org.json.JSONObject jsonHeaders = snapshot.optJSONObject("headers");
+                    if (jsonHeaders != null) {
+                        java.util.Iterator<String> keys = jsonHeaders.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            headers.put(key, jsonHeaders.optString(key, ""));
+                        }
+                    }
+                    String referer = snapshot.optString("referer", currentReferer == null ? "" : currentReferer);
+                    String ua = snapshot.optString("userAgent", currentUserAgent == null ? "" : currentUserAgent);
+                    switchCapturedStream(updated, referer, ua, headers);
+                    captureBaselineForSelection = capturedAt;
+                }
+            } catch (Exception e) {
+                android.util.Log.w("RuFilmTV-VLC", "Episode stream refresh failed", e);
+            }
+            handler.postDelayed(this, 900L);
+        }
+    };
 
     @SuppressWarnings("unchecked")
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -106,545 +116,337 @@ public class NativePlayerActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setStatusBarColor(android.graphics.Color.BLACK);
         getWindow().setNavigationBarColor(android.graphics.Color.BLACK);
-        if (android.os.Build.VERSION.SDK_INT >= 19) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        }
+        if (android.os.Build.VERSION.SDK_INT >= 19) getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
-        String rawUrl = getIntent().getStringExtra(EXTRA_URL);
-        currentMediaUrl = rawUrl;
-        String referer = getIntent().getStringExtra(EXTRA_REFERER);
-        String userAgent = getIntent().getStringExtra(EXTRA_USER_AGENT);
-        currentReferer = referer;
-        currentUserAgent = userAgent;
-        if (rawUrl == null || !(rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
+        currentMediaUrl = getIntent().getStringExtra(EXTRA_URL);
+        currentAudioUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
+        currentReferer = getIntent().getStringExtra(EXTRA_REFERER);
+        currentUserAgent = getIntent().getStringExtra(EXTRA_USER_AGENT);
+        requestedStartPositionMs = Math.max(0L, getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L));
+        if (!validUrl(currentMediaUrl)) {
             Toast.makeText(this, "Не удалось получить прямую ссылку на видео", Toast.LENGTH_LONG).show();
-            finish(); return;
+            finish();
+            return;
         }
 
-        Map<String, String> headers = new HashMap<>();
         try {
             Object supplied = getIntent().getSerializableExtra(EXTRA_HEADERS);
-            if (supplied instanceof Map) headers.putAll((Map<String, String>) supplied);
-        } catch (Exception ignored) { }
-        if (userAgent != null && !userAgent.trim().isEmpty()) headers.put("User-Agent", userAgent);
-        if (referer != null && !referer.trim().isEmpty()) {
-            headers.put("Referer", referer);
-            if (!headers.containsKey("Origin")) {
-                try {
-                    Uri page = Uri.parse(referer);
-                    if (page.getScheme() != null && page.getHost() != null)
-                        headers.put("Origin", page.getScheme() + "://" + page.getHost());
-                } catch (Exception ignored) { }
-            }
-        }
+            if (supplied instanceof Map) currentHeaders.putAll((Map<String,String>) supplied);
+        } catch (Exception ignored) {}
+        addHeaderIfPresent("Referer", currentReferer);
+        if (currentUserAgent == null || currentUserAgent.trim().isEmpty())
+            currentUserAgent = WebSettings.getDefaultUserAgent(this);
+        addHeaderIfPresent("User-Agent", currentUserAgent);
         try {
-            String cookie = CookieManager.getInstance().getCookie(rawUrl);
-            if ((headers.get("Cookie") == null || headers.get("Cookie").isEmpty()) && cookie != null && !cookie.isEmpty())
-                headers.put("Cookie", cookie);
-        } catch (Exception ignored) { }
+            String cookie = CookieManager.getInstance().getCookie(currentMediaUrl);
+            if (cookie != null && !cookie.isEmpty() && !containsHeader("Cookie")) currentHeaders.put("Cookie", cookie);
+        } catch (Exception ignored) {}
 
-        String effectiveUa = userAgent == null || userAgent.isEmpty()
-            ? android.webkit.WebSettings.getDefaultUserAgent(this)
-            : userAgent;
-        currentUserAgent = effectiveUa;
-        currentHeaders.putAll(headers);
-        currentHeaders.put("User-Agent", effectiveUa);
-        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent(effectiveUa)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(45000)
-            .setDefaultRequestProperties(headers);
-        DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(
-            new DefaultDataSource.Factory(this, httpFactory));
-        trackSelector = new DefaultTrackSelector(this);
-        trackSelector.setParameters(trackSelector.buildUponParameters()
-            .setTunnelingEnabled(false)
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false));
-        DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this)
-            .setEnableDecoderFallback(true);
-        player = new ExoPlayer.Builder(this, renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setTrackSelector(trackSelector)
-            .build();
+        buildInterface();
+        ArrayList<String> options = new ArrayList<>();
+        options.add("--no-video-title-show");
+        options.add("--network-caching=1500");
+        options.add("--file-caching=1000");
+        options.add("--avcodec-hw=any");
+        options.add("--no-sout-keep");
+        options.add("--verbose=1");
+        try {
+            libVLC = new LibVLC(this, options);
+            player = new MediaPlayer(libVLC);
+            player.attachViews(videoLayout, null, false, false);
+            player.setEventListener(event -> {
+                if (event.type == MediaPlayer.Event.Playing && !startPositionApplied && requestedStartPositionMs > 0L) {
+                    startPositionApplied = true;
+                    handler.postDelayed(() -> {
+                        if (player != null && !released) player.setTime(requestedStartPositionMs);
+                    }, 350L);
+                } else if (event.type == MediaPlayer.Event.EncounteredError) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "VLC не смог открыть видеопоток", Toast.LENGTH_LONG).show();
+                        android.util.Log.e("RuFilmTV-VLC", "LibVLC encountered playback error for " + diagnosticUrl(currentMediaUrl));
+                    });
+                }
+            });
+            openStream(currentMediaUrl, currentAudioUrl, currentHeaders, true);
+            handler.post(updateTimeline);
+            handler.postDelayed(syncEpisode, 1200L);
+            showControls();
+        } catch (Exception e) {
+            android.util.Log.e("RuFilmTV-VLC", "LibVLC initialization failed", e);
+            Toast.makeText(this, "Не удалось запустить LibVLC: " + e.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+            finish();
+        }
+    }
 
+    private void buildInterface() {
         FrameLayout root = new FrameLayout(this);
-        playerView = new PlayerView(this);
-        playerView.setUseController(true);
-        playerView.setControllerAutoShow(true);
-        playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-        playerView.setKeepScreenOn(true);
-        playerView.setBackgroundColor(android.graphics.Color.BLACK);
-        playerView.setPlayer(player);
-        root.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
+        root.setBackgroundColor(android.graphics.Color.BLACK);
+        videoLayout = new VLCVideoLayout(this);
+        root.addView(videoLayout, new FrameLayout.LayoutParams(-1, -1));
 
-
-        playerView.setUseController(false);
         FrameLayout overlay = new FrameLayout(this);
         overlay.setClickable(false);
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
 
-        android.widget.LinearLayout top = new android.widget.LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(22), dp(10), dp(22), dp(10));
-        top.setBackgroundColor(0x55000000);
-        assistantTopBar = top;
+        topBar = new LinearLayout(this);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(22), dp(8), dp(22), dp(8));
+        topBar.setBackgroundColor(0x55000000);
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, dp(54), Gravity.TOP);
-        overlay.addView(top, topParams);
-        android.widget.TextView title = new android.widget.TextView(this);
-        title.setText("RUFILM TV");
-        title.setTextColor(android.graphics.Color.WHITE);
-        title.setTextSize(16);
+        overlay.addView(topBar, topParams);
+        TextView title = controlText("RUFILM TV · VLC", 16);
+        title.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
-        top.addView(title, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
-        android.widget.TextView exitFullscreen = controlText("Выход", 14);
-        exitFullscreen.setContentDescription("Выйти из полноэкранного режима");
-        top.addView(exitFullscreen, new android.widget.LinearLayout.LayoutParams(dp(76), dp(46)));
-        exitFullscreen.setOnClickListener(v -> { releasePlayer(); finish(); });
-        android.widget.TextView menu = controlText("⋮", 30);
-        top.addView(menu, new android.widget.LinearLayout.LayoutParams(dp(48), dp(46)));
-        menu.setOnClickListener(v -> showAssistantMenu());
+        topBar.addView(title, new LinearLayout.LayoutParams(0, -1, 1f));
+        TextView exit = controlText("Выход", 14);
+        topBar.addView(exit, new LinearLayout.LayoutParams(dp(76), -1));
+        exit.setOnClickListener(v -> { releasePlayer(); finish(); });
+        TextView menu = controlText("⋮", 28);
+        topBar.addView(menu, new LinearLayout.LayoutParams(dp(48), -1));
+        menu.setOnClickListener(v -> showMenu());
 
-        assistantControls = new android.widget.LinearLayout(this);
-        assistantControls.setOrientation(android.widget.LinearLayout.VERTICAL);
-        assistantControls.setPadding(dp(18), dp(8), dp(18), dp(12));
-        assistantControls.setBackgroundColor(0x55000000);
-        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(-1, dp(124), Gravity.BOTTOM);
-        overlay.addView(assistantControls, bottomParams);
+        controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setPadding(dp(18), dp(8), dp(18), dp(10));
+        controls.setBackgroundColor(0x55000000);
+        FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, dp(124), Gravity.BOTTOM);
+        overlay.addView(controls, bottom);
 
-        android.widget.LinearLayout timelineRow = new android.widget.LinearLayout(this);
-        timelineRow.setGravity(Gravity.CENTER_VERTICAL);
-        assistantControls.addView(timelineRow, new android.widget.LinearLayout.LayoutParams(-1, dp(34)));
+        LinearLayout timeline = new LinearLayout(this);
+        timeline.setGravity(Gravity.CENTER_VERTICAL);
+        controls.addView(timeline, new LinearLayout.LayoutParams(-1, dp(34)));
         currentTimeText = controlText("0:00", 11);
-        timelineRow.addView(currentTimeText, new android.widget.LinearLayout.LayoutParams(dp(48), -2));
-        timelineSeek = new android.widget.SeekBar(this);
+        timeline.addView(currentTimeText, new LinearLayout.LayoutParams(dp(50), -2));
+        timelineSeek = new SeekBar(this);
         timelineSeek.setMax(1000);
-        timelineSeek.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffa78bfa));
-        timelineSeek.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffb49aff));
-        timelineSeek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x99ffffff));
-        timelineSeek.setPadding(dp(4), 0, dp(4), 0);
         timelineSeek.setFocusable(true);
-        timelineRow.addView(timelineSeek, new android.widget.LinearLayout.LayoutParams(0, dp(32), 1f));
+        timeline.addView(timelineSeek, new LinearLayout.LayoutParams(0, dp(32), 1f));
         durationTimeText = controlText("0:00", 11);
-        durationTimeText.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        timelineRow.addView(durationTimeText, new android.widget.LinearLayout.LayoutParams(dp(48), -2));
-        timelineSeek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+        timeline.addView(durationTimeText, new LinearLayout.LayoutParams(dp(50), -2));
+        timelineSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
                 if (fromUser && player != null) {
-                    long duration = player.getDuration();
-                    if (duration > 0 && duration != C.TIME_UNSET) currentTimeText.setText(formatTime(duration * progress / 1000L));
+                    long length = player.getLength();
+                    if (length > 0) currentTimeText.setText(formatTime(length * value / 1000L));
                 }
             }
-            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { showAssistantControls(); }
-            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {
-                if (player != null) {
-                    long duration = player.getDuration();
-                    if (duration > 0 && duration != C.TIME_UNSET) player.seekTo(duration * seekBar.getProgress() / 1000L);
-                }
-                scheduleAssistantHide();
+            @Override public void onStartTrackingTouch(SeekBar bar) { showControls(); }
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                if (player != null && player.getLength() > 0)
+                    player.setTime(player.getLength() * bar.getProgress() / 1000L);
+                scheduleHide();
             }
         });
 
-        android.widget.FrameLayout controlRow = new android.widget.FrameLayout(this);
-        assistantControls.addView(controlRow, new android.widget.LinearLayout.LayoutParams(-1, dp(62)));
-        android.widget.LinearLayout transport = new android.widget.LinearLayout(this);
+        FrameLayout row = new FrameLayout(this);
+        controls.addView(row, new LinearLayout.LayoutParams(-1, dp(62)));
+        LinearLayout transport = new LinearLayout(this);
         transport.setGravity(Gravity.CENTER);
-        android.widget.FrameLayout.LayoutParams transportParams = new android.widget.FrameLayout.LayoutParams(-2, -1, Gravity.CENTER);
-        controlRow.addView(transport, transportParams);
-        android.widget.TextView back = controlText("↶10", 17);
-        transport.addView(back, new android.widget.LinearLayout.LayoutParams(dp(58), dp(54)));
-        back.setOnClickListener(v -> { if (player != null) player.seekTo(Math.max(0L, player.getCurrentPosition()-10000L)); showAssistantControls(); });
-        playPauseButton = controlText("Ⅱ", 29);
-        transport.addView(playPauseButton, new android.widget.LinearLayout.LayoutParams(dp(68), dp(54)));
-        playPauseButton.setOnClickListener(v -> { if (player != null) { if (player.isPlaying()) player.pause(); else player.play(); } showAssistantControls(); });
-        android.widget.TextView forward = controlText("10↷", 17);
-        transport.addView(forward, new android.widget.LinearLayout.LayoutParams(dp(58), dp(54)));
-        forward.setOnClickListener(v -> { if (player != null) player.seekTo(Math.min(player.getDuration(), player.getCurrentPosition()+10000L)); showAssistantControls(); });
+        row.addView(transport, new FrameLayout.LayoutParams(-2, -1, Gravity.CENTER));
+        TextView back = controlText("↶10", 17);
+        transport.addView(back, new LinearLayout.LayoutParams(dp(58), -1));
+        back.setOnClickListener(v -> seekBy(-10000L));
+        playPauseButton = controlText("▶", 28);
+        transport.addView(playPauseButton, new LinearLayout.LayoutParams(dp(68), -1));
+        playPauseButton.setOnClickListener(v -> {
+            if (player != null) { if (player.isPlaying()) player.pause(); else player.play(); }
+            showControls();
+        });
+        TextView forward = controlText("10↷", 17);
+        transport.addView(forward, new LinearLayout.LayoutParams(dp(58), -1));
+        forward.setOnClickListener(v -> seekBy(10000L));
 
-        // Media3 volume control: independent from the device's system volume.
-        android.widget.LinearLayout volumeControls = new android.widget.LinearLayout(this);
-        volumeControls.setGravity(Gravity.CENTER_VERTICAL);
-        android.widget.FrameLayout.LayoutParams volumeParams = new android.widget.FrameLayout.LayoutParams(-2, -1, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        controlRow.addView(volumeControls, volumeParams);
-
-        volumeButton = new Button(this);
-        volumeButton.setText("🔊");
-        volumeButton.setTextSize(18);
-        volumeButton.setMinWidth(0);
-        volumeButton.setMinimumWidth(0);
-        volumeButton.setPadding(0, 0, 0, 0);
-        volumeButton.setBackgroundColor(0x00000000);
-        volumeButton.setContentDescription("Отключить или включить звук");
-        volumeButton.setFocusable(true);
-        volumeControls.addView(volumeButton, new android.widget.LinearLayout.LayoutParams(dp(48), dp(54)));
-
-        volumeSeekBar = new android.widget.SeekBar(this);
-        volumeSeekBar.setMax(100);
-        volumeSeekBar.setProgress(100);
-        volumeSeekBar.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffffffff));
-        volumeSeekBar.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffffffff));
-        volumeSeekBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x99ffffff));
-        volumeSeekBar.setPadding(dp(4), 0, dp(4), 0);
-        volumeSeekBar.setFocusable(true);
-        volumeSeekBar.setContentDescription("Громкость Media3");
-        volumeControls.addView(volumeSeekBar, new android.widget.LinearLayout.LayoutParams(dp(142), dp(44)));
-
+        LinearLayout volume = new LinearLayout(this);
+        volume.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(volume, new FrameLayout.LayoutParams(-2, -1, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        volumeButton = controlText("🔊", 18);
+        volume.addView(volumeButton, new LinearLayout.LayoutParams(dp(46), -1));
         volumeButton.setOnClickListener(v -> {
             if (player == null) return;
-            if (player.getVolume() > 0f) {
-                volumeBeforeMute = player.getVolume();
-                player.setVolume(0f);
-            } else {
-                player.setVolume(volumeBeforeMute > 0f ? volumeBeforeMute : 1f);
-            }
-            updateVolumeControls();
-            showAssistantControls();
+            int current = player.getVolume();
+            if (current > 0) { volumeBeforeMute = current; player.setVolume(0); }
+            else player.setVolume((int)Math.max(1f, volumeBeforeMute));
+            updateVolume();
+            showControls();
         });
-        volumeSeekBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+        volumeSeek = new SeekBar(this);
+        volumeSeek.setMax(200);
+        volumeSeek.setProgress(100);
+        volumeSeek.setFocusable(true);
+        volume.addView(volumeSeek, new LinearLayout.LayoutParams(dp(130), dp(44)));
+        volumeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
                 if (fromUser && player != null) {
-                    float value = progress / 100f;
                     player.setVolume(value);
-                    if (value > 0f) volumeBeforeMute = value;
+                    if (value > 0) volumeBeforeMute = value;
                     updateVolumeButton();
                 }
             }
-            @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) { showAssistantControls(); }
-            @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) { scheduleAssistantHide(); }
+            @Override public void onStartTrackingTouch(SeekBar bar) { showControls(); }
+            @Override public void onStopTrackingTouch(SeekBar bar) { scheduleHide(); }
         });
 
-        displayButton = controlText("⛶", 23);
-        android.widget.FrameLayout.LayoutParams displayParams = new android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        controlRow.addView(displayButton, displayParams);
-        displayButton.setOnClickListener(v -> {
-            if (playerView != null) {
-                zoomMode = !zoomMode;
-                playerView.setResizeMode(zoomMode
-                    ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM : AspectRatioFrameLayout.RESIZE_MODE_FIT);
-            }
-            showAssistantControls();
+        zoomButton = controlText("⛶", 23);
+        row.addView(zoomButton, new FrameLayout.LayoutParams(dp(54), -1, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        zoomButton.setOnClickListener(v -> {
+            zoomMode = !zoomMode;
+            if (player != null) player.setScale(zoomMode ? 0f : 0f);
+            if (player != null) player.setAspectRatio(zoomMode ? "16:9" : null);
+            showControls();
         });
 
-        overlay.setOnClickListener(v -> {
-            if (!controlsVisible) showAssistantControls();
-            else scheduleAssistantHide();
-        });
-        root.setOnClickListener(v -> {
-            if (!controlsVisible) showAssistantControls();
-            else scheduleAssistantHide();
-        });
-
-        // Episode selection is intentionally left to the source website.
-        qualityButton = new Button(this);
+        overlay.setOnClickListener(v -> toggleControls());
+        root.setOnClickListener(v -> toggleControls());
         setContentView(root);
-        showAssistantControls();
-
-        String audioRawUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
-        if (audioRawUrl != null && (audioRawUrl.startsWith("https://") || audioRawUrl.startsWith("http://"))) {
-            String videoPlaybackUrl = createPlaybackUrl(rawUrl, headers, true);
-            String audioPlaybackUrl = createPlaybackUrl(audioRawUrl, headers, true);
-            MediaItem videoItem = new MediaItem.Builder().setUri(Uri.parse(videoPlaybackUrl)).setMimeType("video/mp4").build();
-            MediaItem audioItem = new MediaItem.Builder().setUri(Uri.parse(audioPlaybackUrl)).setMimeType("audio/mp4").build();
-            ProgressiveMediaSource.Factory pf = new ProgressiveMediaSource.Factory(new DefaultDataSource.Factory(this, httpFactory));
-            player.setMediaSource(new MergingMediaSource(pf.createMediaSource(videoItem), pf.createMediaSource(audioItem)));
-            android.util.Log.i("RuFilmTV", "OK dual-track handoff: separate signed video and audio tracks");
-        } else {
-            String playbackUrl = createPlaybackUrl(rawUrl, headers, false);
-            MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
-            String lower = rawUrl.toLowerCase(Locale.ROOT);
-            if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-            else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-            player.setMediaItem(item.build());
-        }
-        requestedStartPositionMs = Math.max(0L, getIntent().getLongExtra(EXTRA_START_POSITION_MS, 0L));
-        android.util.Log.i("RuFilmTV", "Native handoff requested start position: " + requestedStartPositionMs + " ms");
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int playbackState) {
-                if (playbackState == Player.STATE_READY && !startPositionApplied) {
-                    startPositionApplied = true;
-                    long duration = player.getDuration();
-                    long target = requestedStartPositionMs;
-                    if (target > 0L && (duration == C.TIME_UNSET || duration <= 0L || target < duration)) {
-                        player.seekTo(target);
-                        android.util.Log.i("RuFilmTV", "Native player seek applied: " + target + " ms");
-                    }
-                    player.play();
-                }
-            }
-            @Override public void onPlayerError(androidx.media3.common.PlaybackException error) {
-                String detail = "Ошибка потока, код: " + error.errorCode;
-                Throwable cause = error.getCause();
-                while (cause != null) {
-                    if (cause instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
-                        androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException http =
-                            (androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) cause;
-                        detail += " (HTTP " + http.responseCode + ")";
-                        android.util.Log.e("RuFilmTV-DIAG", "Media3 HTTP " + http.responseCode +
-                            " url=" + diagnosticUrl(http.dataSpec.uri.toString()) +
-                            " responseHeaders=" + safeResponseHeaders(http.headerFields));
-                        break;
-                    }
-                    cause = cause.getCause();
-                }
-                Throwable root = error;
-                while (root.getCause() != null) root = root.getCause();
-                android.util.Log.e("RuFilmTV-DIAG", "Media3 playback failed code=" + error.errorCode +
-                    " errorClass=" + root.getClass().getName());
-                Toast.makeText(NativePlayerActivity.this, detail, Toast.LENGTH_LONG).show();
-                // A failed native handoff must never strand the viewer on a black screen.
-                // Return to MainActivity, which restores and resumes the original HTML5 player.
-                if (!fallbackToOriginalScheduled) {
-                    fallbackToOriginalScheduled = true;
-                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                        if (!isFinishing()) {
-                            android.util.Log.w("RuFilmTV", "Native playback failed; returning to original WebView player");
-                            finish();
-                        }
-                    }, 2200L);
-                }
-            }
-            @Override public void onTracksChanged(androidx.media3.common.Tracks tracks) {
-                if (qualityButton != null) qualityButton.setEnabled(hasVideoTracks());
-                for (androidx.media3.common.Tracks.Group group : tracks.getGroups()) {
-                    androidx.media3.common.TrackGroup mediaGroup = group.getMediaTrackGroup();
-                    for (int i = 0; i < mediaGroup.length; i++) {
-                        Format format = mediaGroup.getFormat(i);
-                        android.util.Log.i("RuFilmTV-AudioDiag", "track type=" + group.getType() +
-                            " supported=" + group.isTrackSupported(i) +
-                            " selected=" + group.isTrackSelected(i) +
-                            " mime=" + format.sampleMimeType +
-                            " language=" + format.language +
-                            " channels=" + format.channelCount +
-                            " sampleRate=" + format.sampleRate);
-                    }
-                }
-            }
-        });
-        player.prepare();
-        syncHandler.postDelayed(syncRunnable, 1200L);
-        assistantHandler.post(updateTimeline);
-        scheduleAssistantHide();
     }
 
-    // Alloha was working in beta.30 with Media3 reading its original URL and
-    // the WebView-captured Referer/Origin/Cookie headers. Keep that direct path
-    // for Alloha; OK.ru and VK continue through the beta.59 authenticated proxy.
-    private boolean isAllohaPlayback(String sourceUrl, Map<String, String> headers) {
-        String referer = currentReferer == null ? "" : currentReferer;
-        String origin = "";
-        if (headers != null) {
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                if (entry.getKey() == null) continue;
-                if ("referer".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null)
-                    referer = entry.getValue();
-                else if ("origin".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null)
-                    origin = entry.getValue();
-            }
-        }
-        String context = (referer + " " + origin + " " + (sourceUrl == null ? "" : sourceUrl))
-            .toLowerCase(Locale.ROOT);
-        return context.contains("alloha") || context.contains("stravers");
-    }
-
-    private static String diagnosticUrl(String value) {
+    private void openStream(String url, String audioUrl, Map<String,String> headers, boolean initial) {
+        if (!validUrl(url) || player == null) return;
         try {
-            Uri u = Uri.parse(value);
-            String host = u.getHost() == null ? "unknown" : u.getHost();
-            String path = u.getPath() == null ? "/" : u.getPath();
-            return host + path;
-        } catch (Exception ignored) { return "unparseable"; }
-    }
-
-    private static String safeResponseHeaders(Map<String, java.util.List<String>> headers) {
-        if (headers == null) return "none";
-        StringBuilder out = new StringBuilder();
-        for (String key : new String[]{"Content-Type", "Content-Length", "Accept-Ranges", "Server"}) {
-            for (Map.Entry<String, java.util.List<String>> entry : headers.entrySet()) {
-                if (entry.getKey() != null && key.equalsIgnoreCase(entry.getKey())) {
-                    if (out.length() > 0) out.append(",");
-                    out.append(key).append("=").append(entry.getValue());
-                }
+            boolean useProxy = audioUrl != null || isOkOrVk(url);
+            String playbackUrl = createPlaybackUrl(url, headers, useProxy);
+            Media media = new Media(libVLC, Uri.parse(playbackUrl));
+            addMediaOptions(media, headers);
+            media.addOption(":network-caching=1500");
+            media.addOption(":clock-jitter=0");
+            media.addOption(":clock-synchro=0");
+            player.stop();
+            player.setMedia(media);
+            media.release();
+            if (audioUrl != null && validUrl(audioUrl)) {
+                String audioPlaybackUrl = createPlaybackUrl(audioUrl, headers, true);
+                boolean added = player.addSlave(IMedia.Slave.Type.Audio, Uri.parse(audioPlaybackUrl), true);
+                android.util.Log.i("RuFilmTV-VLC", "OK.ru external audio slave attached=" + added);
             }
-        }
-        return out.length() == 0 ? "no-safe-headers" : out.toString();
-    }
-
-    private static String headerHost(Map<String, String> headers, String name) {
-        if (headers == null) return "none";
-        for (Map.Entry<String, String> entry : headers.entrySet()) {
-            if (entry.getKey() != null && name.equalsIgnoreCase(entry.getKey()) && entry.getValue() != null) {
-                try { return Uri.parse(entry.getValue()).getHost(); } catch (Exception ignored) { return "invalid"; }
-            }
-        }
-        return "none";
-    }
-
-    // Route OK.ru/VK through the beta.59 authenticated loopback bridge.
-    // Alloha stays direct, exactly as in the beta.30 working implementation.
-    // beta.30 used direct Media3 for VK and Alloha; beta.59's authenticated
-    // proxy is required only for OK.ru's separate signed audio/video chunks.
-    private String createPlaybackUrl(String sourceUrl, Map<String, String> headers, boolean useOkProxy) {
-        android.util.Log.i("RuFilmTV-DIAG", "Media3 route=" + (useOkProxy ? "OK_LOCAL_PROXY" : "DIRECT_BETA30") +
-            " source=" + diagnosticUrl(sourceUrl) +
-            " refererHost=" + headerHost(headers, "Referer") +
-            " originHost=" + headerHost(headers, "Origin"));
-        if (!useOkProxy) return sourceUrl;
-        try {
-            String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
-            android.util.Log.i("RuFilmTV-DIAG", "OK LocalStreamProxy started for " + diagnosticUrl(sourceUrl));
-            return proxyUrl;
+            player.play();
+            if (initial) android.util.Log.i("RuFilmTV-VLC", "LibVLC stream opened route=" +
+                (useProxy ? "LOCAL_PROXY" : "DIRECT") + " url=" + diagnosticUrl(url));
         } catch (Exception e) {
-            android.util.Log.e("RuFilmTV-DIAG", "OK LocalStreamProxy startup failed type=" + e.getClass().getName());
+            android.util.Log.e("RuFilmTV-VLC", "Could not open stream", e);
+            Toast.makeText(this, "Ошибка запуска VLC: " + e.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void addMediaOptions(Media media, Map<String,String> headers) {
+        String ua = header(headers, "User-Agent");
+        String referer = header(headers, "Referer");
+        String cookie = header(headers, "Cookie");
+        if (ua != null) media.addOption(":http-user-agent=" + safeOption(ua));
+        if (referer != null) media.addOption(":http-referrer=" + safeOption(referer));
+        if (cookie != null) media.addOption(":http-cookie=" + safeOption(cookie));
+        String origin = header(headers, "Origin");
+        if (origin != null) media.addOption(":http-origin=" + safeOption(origin));
+        media.addOption(":avcodec-hw=any");
+    }
+
+    private void switchCapturedStream(String url, String referer, String ua, HashMap<String,String> headers) {
+        if (!validUrl(url) || player == null || released) return;
+        if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);
+        if (ua != null && !ua.isEmpty()) headers.put("User-Agent", ua);
+        try {
+            String cookie = CookieManager.getInstance().getCookie(url);
+            if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
+        } catch (Exception ignored) {}
+        if (!headers.containsKey("User-Agent")) headers.put("User-Agent", WebSettings.getDefaultUserAgent(this));
+        currentMediaUrl = url;
+        currentReferer = referer;
+        currentUserAgent = headers.get("User-Agent");
+        currentHeaders = new HashMap<>(headers);
+        currentAudioUrl = null;
+        startPositionApplied = true;
+        openStream(url, null, headers, false);
+        android.util.Log.i("RuFilmTV-VLC", "Episode stream switched to " + diagnosticUrl(url));
+    }
+
+    private String createPlaybackUrl(String sourceUrl, Map<String,String> headers, boolean useProxy) {
+        if (!useProxy) return sourceUrl;
+        try {
+            String proxy = LocalStreamProxy.start(sourceUrl, headers);
+            android.util.Log.i("RuFilmTV-VLC", "Authenticated proxy started for " + diagnosticUrl(sourceUrl));
+            return proxy;
+        } catch (Exception e) {
+            android.util.Log.e("RuFilmTV-VLC", "Proxy startup failed; using source URL directly", e);
             return sourceUrl;
         }
     }
 
-    private void syncEpisodeStreamAfterSelection() {
-        syncHandler.postDelayed(() -> trySyncEpisodeStream(0), 700L);
+    private boolean isOkOrVk(String url) {
+        String value = (url == null ? "" : url).toLowerCase(Locale.ROOT);
+        String ref = (currentReferer == null ? "" : currentReferer).toLowerCase(Locale.ROOT);
+        return value.contains("ok.ru") || value.contains("odnoklassniki") || ref.contains("ok.ru") ||
+            value.contains("vk.com") || value.contains("vk.ru") || ref.contains("vk.com");
     }
 
-    private void trySyncEpisodeStream(int attempt) {
-        if (player == null) return;
-        try {
-            org.json.JSONObject snapshot = new org.json.JSONObject(MainActivity.getCapturedMediaSnapshot());
-            long capturedAt = snapshot.optLong("capturedAt", 0L);
-            String updated = snapshot.optString("url", "");
-            if (capturedAt <= captureBaselineForSelection || updated.isEmpty()) {
-                if (attempt < 14) syncHandler.postDelayed(() -> trySyncEpisodeStream(attempt + 1), 500L);
-                return;
-            }
-            if (updated.equals(currentMediaUrl)) return;
-            HashMap<String, String> headers = new HashMap<>();
-            org.json.JSONObject jsonHeaders = snapshot.optJSONObject("headers");
-            if (jsonHeaders != null) {
-                java.util.Iterator<String> keys = jsonHeaders.keys();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    headers.put(key, jsonHeaders.optString(key, ""));
-                }
-            }
-            String referer = snapshot.optString("referer", currentReferer == null ? "" : currentReferer);
-            String ua = snapshot.optString("userAgent", currentUserAgent == null ? "" : currentUserAgent);
-            switchCapturedStream(updated, referer, ua, headers);
-        } catch (Exception e) {
-            android.util.Log.w("RuFilmTV", "Could not refresh stream after episode selection", e);
-        }
+    private void addHeaderIfPresent(String key, String value) {
+        if (value != null && !value.trim().isEmpty() && !containsHeader(key)) currentHeaders.put(key, value);
     }
-
-    private void switchCapturedStream(String url, String referer, String userAgent, HashMap<String, String> headers) {
-        if (player == null || url == null || url.isEmpty()) return;
-        if (referer != null && !referer.isEmpty()) headers.put("Referer", referer);
-        if (userAgent != null && !userAgent.isEmpty()) headers.put("User-Agent", userAgent);
-        try {
-            String cookie = CookieManager.getInstance().getCookie(url);
-            if (cookie != null && !cookie.isEmpty()) headers.put("Cookie", cookie);
-        } catch (Exception ignored) { }
-        String ua = (userAgent == null || userAgent.isEmpty())
-            ? android.webkit.WebSettings.getDefaultUserAgent(this) : userAgent;
-        headers.put("User-Agent", ua);
-        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent(ua)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(45000)
-            .setDefaultRequestProperties(headers);
-        DefaultMediaSourceFactory factory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, httpFactory));
-        String playbackUrl = createPlaybackUrl(url, headers, false);
-        MediaItem.Builder item = new MediaItem.Builder().setUri(Uri.parse(playbackUrl));
-        String lower = url.toLowerCase(Locale.ROOT);
-        if (lower.contains(".m3u8")) item.setMimeType(MimeTypes.APPLICATION_M3U8);
-        else if (lower.contains(".mpd")) item.setMimeType(MimeTypes.APPLICATION_MPD);
-        player.setMediaSource(factory.createMediaSource(item.build()));
-        currentMediaUrl = url;
-        currentReferer = referer;
-        currentUserAgent = ua;
-        currentHeaders = new HashMap<>(headers);
-        player.prepare();
-        player.play();
-    }
-    private boolean hasVideoTracks() {
-        if (trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) return false;
-        MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
-        for (int r = 0; r < info.getRendererCount(); r++)
-            if (info.getRendererType(r) == C.TRACK_TYPE_VIDEO && info.getTrackGroups(r).length > 0) return true;
+    private boolean containsHeader(String key) {
+        for (String k : currentHeaders.keySet()) if (k != null && k.equalsIgnoreCase(key)) return true;
         return false;
     }
-
-    private void showQualityDialog() {
-        if (trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) {
-            Toast.makeText(this, "Список качества ещё загружается", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        ArrayList<QualityOption> options = new ArrayList<>();
-        HashSet<String> seen = new HashSet<>();
-        MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
-        for (int r = 0; r < info.getRendererCount(); r++) {
-            if (info.getRendererType(r) != C.TRACK_TYPE_VIDEO) continue;
-            androidx.media3.exoplayer.source.TrackGroupArray groups = info.getTrackGroups(r);
-            for (int g = 0; g < groups.length; g++) {
-                TrackGroup group = groups.get(g);
-                for (int i = 0; i < group.length; i++) {
-                    Format f = group.getFormat(i);
-                    if (f.height <= 0) continue;
-                    String key = f.height + "";
-                    if (seen.add(key)) options.add(new QualityOption(group, i, f.height));
-                }
-            }
-        }
-        Collections.sort(options, (a,b) -> Integer.compare(b.height, a.height));
-        ArrayList<String> labels = new ArrayList<>();
-        labels.add("Авто");
-        for (QualityOption option : options) labels.add(option.label());
-        new AlertDialog.Builder(this)
-            .setTitle("Качество видео")
-            .setSingleChoiceItems(labels.toArray(new String[0]), 0, (dialog, which) -> {
-                if (which == 0) {
-                    trackSelector.setParameters(trackSelector.buildUponParameters()
-                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false).build());
-                    qualityButton.setText("Качество: Авто ▾");
-                } else {
-                    QualityOption option = options.get(which - 1);
-                    trackSelector.setParameters(trackSelector.buildUponParameters()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
-                        .setOverrideForType(new TrackSelectionOverride(option.group,
-                            Collections.singletonList(option.trackIndex))).build());
-                    qualityButton.setText("Качество: " + option.label() + " ▾");
-                }
-                dialog.dismiss();
-            })
-            .setNegativeButton("Закрыть", null)
-            .show();
+    private String header(Map<String,String> headers, String key) {
+        if (headers == null) return null;
+        for (Map.Entry<String,String> entry : headers.entrySet())
+            if (entry.getKey() != null && key.equalsIgnoreCase(entry.getKey())) return entry.getValue();
+        return null;
     }
-
-
-    private void updateVolumeButton() {
-        if (volumeButton == null || player == null) return;
-        volumeButton.setText(player.getVolume() <= 0.001f ? "🔇" : (player.getVolume() < 0.5f ? "🔉" : "🔊"));
-        volumeButton.setContentDescription(player.getVolume() <= 0.001f
-            ? "Включить звук" : "Отключить звук");
+    private String safeOption(String value) { return value == null ? "" : value.replace("\r","").replace("\n",""); }
+    private boolean validUrl(String value) {
+        return value != null && (value.startsWith("https://") || value.startsWith("http://"));
     }
-
-    private void updateVolumeControls() {
-        if (volumeSeekBar != null && player != null) {
-            int progress = Math.round(player.getVolume() * 100f);
-            if (volumeSeekBar.getProgress() != progress) volumeSeekBar.setProgress(progress);
+    private void seekBy(long delta) {
+        if (player != null) {
+            long length = player.getLength();
+            long current = Math.max(0L, player.getTime());
+            player.setTime(Math.max(0L, length > 0 ? Math.min(length, current + delta) : current + delta));
         }
+        showControls();
+    }
+    private void updateVolume() {
+        if (player == null) return;
+        int value = Math.max(0, player.getVolume());
+        if (volumeSeek != null && volumeSeek.getProgress() != value) volumeSeek.setProgress(Math.min(200, value));
         updateVolumeButton();
     }
-
-    private android.widget.TextView controlText(String value, int size) {
-        android.widget.TextView t = new android.widget.TextView(this);
+    private void updateVolumeButton() {
+        if (volumeButton != null && player != null)
+            volumeButton.setText(player.getVolume() <= 0 ? "🔇" : (player.getVolume() < 70 ? "🔉" : "🔊"));
+    }
+    private void showMenu() {
+        new AlertDialog.Builder(this).setTitle("Плеер VLC")
+            .setItems(new String[]{"Качество и дорожки выбираются источником", "Скрыть панель"}, (d, which) -> {
+                if (which == 1) hideControls();
+            }).show();
+        showControls();
+    }
+    private void showControls() {
+        if (controls == null) return;
+        controlsVisible = true;
+        controls.setVisibility(View.VISIBLE);
+        topBar.setVisibility(View.VISIBLE);
+        scheduleHide();
+    }
+    private void hideControls() {
+        controlsVisible = false;
+        controls.setVisibility(View.GONE);
+        topBar.setVisibility(View.GONE);
+    }
+    private void toggleControls() { if (controlsVisible) hideControls(); else showControls(); }
+    private void scheduleHide() {
+        handler.removeCallbacks(hideControls);
+        handler.postDelayed(hideControls, 5000L);
+    }
+    private TextView controlText(String value, int size) {
+        TextView t = new TextView(this);
         t.setText(value);
         t.setTextColor(android.graphics.Color.WHITE);
         t.setTextSize(size);
         t.setGravity(Gravity.CENTER);
         t.setFocusable(true);
-        t.setBackgroundColor(0x00000000);
         return t;
     }
     private String formatTime(long ms) {
@@ -653,61 +455,47 @@ public class NativePlayerActivity extends Activity {
         return h > 0 ? String.format(Locale.ROOT, "%d:%02d:%02d", h, m, sec)
             : String.format(Locale.ROOT, "%d:%02d", m, sec);
     }
-    private void showAssistantMenu() {
-        String[] items = {"Качество видео", "Скрыть панель"};
-        new AlertDialog.Builder(this).setItems(items, (d, which) -> {
-            if (which == 0) showQualityDialog();
-            else hideAssistantControls();
-        }).show();
-        showAssistantControls();
-    }
-    private void showAssistantControls() {
-        if (assistantControls == null) return;
-        controlsVisible = true;
-        assistantControls.setVisibility(View.VISIBLE);
-        if (assistantTopBar != null) assistantTopBar.setVisibility(View.VISIBLE);
-        scheduleAssistantHide();
-    }
-    private void hideAssistantControls() {
-        if (assistantControls == null) return;
-        controlsVisible = false;
-        assistantControls.setVisibility(View.GONE);
-        if (assistantTopBar != null) assistantTopBar.setVisibility(View.GONE);
-    }
-    private void scheduleAssistantHide() {
-        assistantHandler.removeCallbacks(hideAssistantRunnable);
-        assistantHandler.postDelayed(hideAssistantRunnable, 5000L);
-    }
-    private final Runnable hideAssistantRunnable = () -> {
-        if (player != null) hideAssistantControls();
-    };
-
-    @Override public void onUserInteraction() {
-        super.onUserInteraction();
-        if (assistantControls != null && player != null) showAssistantControls();
-    }
-
-    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
-        if (event != null && (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER ||
-                event.getAction() == android.view.MotionEvent.ACTION_HOVER_MOVE ||
-                event.getAction() == android.view.MotionEvent.ACTION_SCROLL)) {
-            if (assistantControls != null && player != null) showAssistantControls();
-        }
-        return super.dispatchGenericMotionEvent(event);
+    private String diagnosticUrl(String value) {
+        try { Uri u = Uri.parse(value); return (u.getHost() == null ? "unknown" : u.getHost()) + (u.getPath() == null ? "/" : u.getPath()); }
+        catch (Exception ignored) { return "invalid-url"; }
     }
     private int dp(int value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
 
+    @Override public void onUserInteraction() {
+        super.onUserInteraction();
+        if (controls != null && player != null) showControls();
+    }
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (event != null && (event.getAction() == MotionEvent.ACTION_HOVER_ENTER ||
+            event.getAction() == MotionEvent.ACTION_HOVER_MOVE || event.getAction() == MotionEvent.ACTION_SCROLL))
+            showControls();
+        return super.dispatchGenericMotionEvent(event);
+    }
     @Override protected void onStop() { super.onStop(); releasePlayer(); }
     @Override protected void onDestroy() { releasePlayer(); super.onDestroy(); }
+    @Override public void onBackPressed() { releasePlayer(); super.onBackPressed(); }
+
     private void releasePlayer() {
-        syncHandler.removeCallbacks(syncRunnable);
-        assistantHandler.removeCallbacks(updateTimeline);
-        assistantHandler.removeCallbacks(hideAssistantRunnable);
+        if (released) return;
+        released = true;
+        handler.removeCallbacks(updateTimeline);
+        handler.removeCallbacks(syncEpisode);
+        handler.removeCallbacks(hideControls);
         if (player != null) {
-            MainActivity.syncOriginalPlayback(player.getCurrentPosition(), false);
-            if (playerView != null) playerView.setPlayer(null);
-            player.release(); player = null;
+            try {
+                MainActivity.syncOriginalPlayback(Math.max(0L, player.getTime()), false);
+                player.setEventListener(null);
+                player.stop();
+                player.detachViews();
+                player.release();
+            } catch (Exception e) {
+                android.util.Log.w("RuFilmTV-VLC", "Player release warning", e);
+            }
+            player = null;
+        }
+        if (libVLC != null) {
+            try { libVLC.release(); } catch (Exception ignored) {}
+            libVLC = null;
         }
     }
-    @Override public void onBackPressed() { releasePlayer(); super.onBackPressed(); }
 }
