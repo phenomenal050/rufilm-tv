@@ -353,7 +353,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         maybeOfferMxPlayer(0L);
     }
 
-    // Media3 is the only playback engine. Handoff automatically on HTML5 fullscreen.
+    // LibVLC is the only native playback engine. Handoff automatically on HTML5 fullscreen.
     private void offerMxPlayer(long positionMs) {
         runOnUiThread(() -> {
             if (nativePlayerLaunching) return;
