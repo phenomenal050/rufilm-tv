@@ -691,7 +691,7 @@ if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
         web.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.requestFocus();
-                v.requestFocusFromTouch();
+                v.// Avoid touch-focus scrolling the WebView to a focused page element.
             }
             return false;
         });
@@ -1171,7 +1171,7 @@ fullscreen_handoff = """            @Override public void onShowCustomView(View 
                 view.setOnTouchListener((target, event) -> {
                     if (event != null && event.getAction() == MotionEvent.ACTION_DOWN) {
                         target.requestFocus();
-                        target.requestFocusFromTouch();
+                        target.// Avoid touch-focus scrolling the WebView to a focused page element.
                     }
                     return false;
                 });"""
