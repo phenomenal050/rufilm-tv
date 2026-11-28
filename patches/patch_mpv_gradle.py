@@ -11,12 +11,10 @@ if settings is None:
 source = settings.read_text(encoding="utf-8")
 repo_url = "https://yuroyami.github.io/maven"
 if repo_url not in source:
-    # Dependency repositories belong in dependencyResolutionManagement.
-    # Do not accidentally add this Maven repository to pluginManagement.
-    match = re.search(r"(dependencyResolutionManagement\\s*\\{[\\s\\S]*?repositories\\s*\\{)", source)
+    match = re.search(r"(dependencyResolutionManagement\s*\{[\s\S]*?repositories\s*\{)", source)
     if not match:
         raise SystemExit("Could not find dependencyResolutionManagement.repositories in settings")
-    insertion = match.group(1) + '\\n        maven { url = uri("' + repo_url + '") }'
+    insertion = match.group(1) + "\n        maven { url = uri(\"" + repo_url + "\") }"
     source = source[:match.start()] + insertion + source[match.end():]
     settings.write_text(source, encoding="utf-8")
 
