@@ -6,10 +6,10 @@ on:
       release_tag:
         description: "Release tag to publish (must match versionName in patches/app-build.gradle.kts)"
         required: true
-        default: "v3.1.0"
+        default: "v3.1.1-beta.85-libvlc"
         type: string
   push:
-    branches: [main, beta]
+    branches: [main, beta, experiment/libvlc-beta79]
     paths:
       - 'RuFilmTV-3.0.0-project.zip'
       - 'patches/**'
@@ -59,12 +59,12 @@ jobs:
           else
             TAG="v$VERSION_NAME"
           fi
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] || { echo "::error::Release tag must look like v3.1.0 or v3.1.0-beta.1"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+(-libvlc)?)?$ ]] || { echo "::error::Release tag must look like v3.1.0, v3.1.0-beta.1, or v3.1.1-beta.85-libvlc"; exit 1; }
           TAG_VERSION="${TAG#v}"
           test "$TAG_VERSION" = "$VERSION_NAME" || {
             echo "::error::Tag $TAG does not match Gradle versionName $VERSION_NAME"; exit 1;
           }
-          if [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+          if [[ "$TAG" =~ -beta\.[0-9]+(-libvlc)?$ ]]; then
             echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
           else
             echo "RELEASE_PRERELEASE=false" >> "$GITHUB_ENV"
@@ -149,8 +149,8 @@ jobs:
           RELEASE_ARGS=()
           if [ "$RELEASE_PRERELEASE" = "true" ]; then
             RELEASE_ARGS+=(--prerelease)
-            RELEASE_TITLE="RuFilmTV $RELEASE_VERSION — публичная тестовая сборка VK"
-            RELEASE_NOTES="Публичная тестовая сборка RuFilmTV. Предварительный канал; после проверки будет опубликована стабильная версия."
+            RELEASE_TITLE="RuFilmTV $RELEASE_VERSION — тестовая сборка LibVLC"
+            RELEASE_NOTES="Тестовая сборка RuFilmTV с LibVLC. Предварительный канал. Установите поверх текущей версии; подпись сохранена."
           else
             RELEASE_TITLE="RuFilmTV 3.1"
             RELEASE_NOTES="Основной публичный стабильный релиз RuFilmTV 3.1. Сохранён оригинальный встроенный VK Video player, обновлятор и рекламная фильтрация. Релиз подписан постоянным ключом RuFilmTV."
