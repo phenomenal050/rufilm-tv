@@ -249,7 +249,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         synchronized (mediaCaptureLock) {
             if (capturedMediaUrl == null || System.currentTimeMillis() - capturedMediaAt > 90000L) return;
             // OK.ru exposes a one-second stub.mp4 before its signed A/V tracks.
-            // Never launch Media3 for an OK session until both fresh tracks exist.
+            // Never launch MPV for an OK session until both fresh tracks exist.
             if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) {
                 android.util.Log.i("RuFilmTV", "Waiting for complete OK.ru A/V pair id=" + capturedOkId +
                     " video=" + (capturedOkVideoUrl != null) + " audio=" + (capturedOkAudioUrl != null));
@@ -353,7 +353,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
         maybeOfferMxPlayer(0L);
     }
 
-    // Media3 is the only playback engine. Handoff automatically on HTML5 fullscreen.
+    // MPV is the only playback engine. Handoff automatically on HTML5 fullscreen.
     private void offerMxPlayer(long positionMs) {
         runOnUiThread(() -> {
             if (nativePlayerLaunching) return;
@@ -362,7 +362,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             playerMode = "original";
             if (!launched) {
                 nativePlayerLaunching = false;
-                Toast.makeText(this, "Не удалось перехватить видео для Media3. Оригинальный плеер оставлен на паузе.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Не удалось перехватить видео для MPV. Оригинальный плеер оставлен на паузе.", Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -375,7 +375,7 @@ capture = '''    // Never let the ad filter intercept actual video manifests or 
             if (!"native".equals(playerMode) || nativePlayerLaunching ||
                     capturedMediaUrl == null || now - capturedMediaAt > 90000L) return false;
             if (capturedOkVideoUrl != null && capturedOkAudioUrl == null) {
-                android.util.Log.w("RuFilmTV", "Waiting for OK.ru audio track before Media3 handoff");
+                android.util.Log.w("RuFilmTV", "Waiting for OK.ru audio track before MPV handoff");
                 return false;
             }
             if (capturedOkVideoUrl != null && capturedOkAudioUrl != null) {
@@ -717,7 +717,7 @@ resume = re.search(r'((?:public|protected)\s+void\s+onResume\s*\(\s*\)\s*\{)', s
 if resume:
     body_end = resume.end()
     if 'nativePlayerLaunching = false;' not in s[body_end:body_end + 220]:
-        s = s[:body_end] + '\n        boolean returningFromNativePlayer = nativePlayerLaunching;\n        if (web != null) web.onResume();\n        if (returningFromNativePlayer && customView != null) hideCustomView();\n        if (returningFromNativePlayer) {\n            synchronized (mediaCaptureLock) {\n                if (capturedOkId != null && capturedOkVideoUrl != null) {\n                    // OK.ru reuses the same buffered video request after Media3 exits.\n                    // Keep that video URL for this content id, but never reuse the old audio URL.\n                    capturedOkAudioUrl = null;\n                    capturedMediaAt = 0L;\n                    android.util.Log.i(\"RuFilmTV\", \"Retained OK video track id=\" + capturedOkId + \"; cleared old audio; waiting for fresh audio track\");\n                } else {\n                    capturedMediaUrl = null;\n                    capturedMediaReferer = null;\n                    capturedMediaUserAgent = null;\n                    capturedMediaHeaders.clear();\n                    capturedOkVideoUrl = null;\n                    capturedOkAudioUrl = null;\n                    capturedOkId = null;\n                    capturedMediaAt = 0L;\n                    capturedMediaPriority = 0;\n                    android.util.Log.i(\"RuFilmTV\", \"Cleared previous non-OK or incomplete media capture\");\n                }\n            }\n            mxPlayIntentUntil = 0L;\n            mxOfferTriggered = false;\n        }\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());\n        if (returningFromNativePlayer && web != null) {\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 350L);\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 1100L);\n        }' + s[body_end:]
+        s = s[:body_end] + '\n        boolean returningFromNativePlayer = nativePlayerLaunching;\n        if (web != null) web.onResume();\n        if (returningFromNativePlayer && customView != null) hideCustomView();\n        if (returningFromNativePlayer) {\n            synchronized (mediaCaptureLock) {\n                if (capturedOkId != null && capturedOkVideoUrl != null) {\n                    // OK.ru reuses the same buffered video request after MPV exits.\n                    // Keep that video URL for this content id, but never reuse the old audio URL.\n                    capturedOkAudioUrl = null;\n                    capturedMediaAt = 0L;\n                    android.util.Log.i(\"RuFilmTV\", \"Retained OK video track id=\" + capturedOkId + \"; cleared old audio; waiting for fresh audio track\");\n                } else {\n                    capturedMediaUrl = null;\n                    capturedMediaReferer = null;\n                    capturedMediaUserAgent = null;\n                    capturedMediaHeaders.clear();\n                    capturedOkVideoUrl = null;\n                    capturedOkAudioUrl = null;\n                    capturedOkId = null;\n                    capturedMediaAt = 0L;\n                    capturedMediaPriority = 0;\n                    android.util.Log.i(\"RuFilmTV\", \"Cleared previous non-OK or incomplete media capture\");\n                }\n            }\n            mxPlayIntentUntil = 0L;\n            mxOfferTriggered = false;\n        }\n        nativePlayerLaunching = false;\n        syncOriginalPlayback(0L, false);\n        applyAudioSyncOffset(getAudioSyncOffsetMs());\n        if (returningFromNativePlayer && web != null) {\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 350L);\n            web.postDelayed(() -> syncOriginalPlayback(0L, false), 1100L);\n        }' + s[body_end:]
 else:
     class_end = s.rfind('}')
     if class_end < 0:
@@ -1063,8 +1063,8 @@ s = s.replace('private final int bg = Color.rgb(17,19,22), panel = Color.rgb(33,
     private final int[] themeColors = {0xffd73445,0xff9b6bdb,0xff3978e8,0xff20a6d8,0xff16a6a0,0xff35a866,0xff91b832,0xffe88732,0xffdc669e,0xffc49a42};''')
 s = s.replace('text("RU FILM",23,Color.WHITE,true)', 'text("RUFILM TV",23,Color.WHITE,true)')
 s = s.replace('text("TV  •  YOUR CINEMA",9,0xffff7b86,true)', 'text("ТВОЙ ОНЛАЙН КИНОТЕАТР",9,0xffff7b86,true)')
-s = s.replace('playerMode = "original"; // Native Media3 handoff intentionally disabled; keep the site original player.',
-'''playerMode = "original"; // Keep the website's original player; Media3 handoff is disabled.
+s = s.replace('playerMode = "original"; // Native MPV handoff intentionally disabled; keep the site original player.',
+'''playerMode = "original"; // Keep the website's original player; MPV handoff is disabled.
         selectedTheme = Math.max(0, Math.min(9, prefs.getInt("theme_index", 0)));
         accent = themeColors[selectedTheme];''')
 s = s.replace('''        playerButton=button("Плеер",false);playerButton.setTextSize(9);''', '''        themeButton=button("Цвет",false);themeButton.setTextSize(9);
@@ -1148,21 +1148,21 @@ if "private boolean isAdFilteringEnabled()" not in s:
 
 
 # Keep the original HTML5/VK player in its own fullscreen surface.
-# Never hide the site's player or switch to Media3 on the Play/fullscreen gesture.
+# Never hide the site's player or switch to MPV on the Play/fullscreen gesture.
 fullscreen_anchor = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}"""
 fullscreen_handoff = """            @Override public void onShowCustomView(View view, CustomViewCallback callback){
                 if(customView!=null){callback.onCustomViewHidden();return;}
-                // Hand off HTML5 fullscreen requests from VK/OK and other embedded players to Media3.
+                // Hand off HTML5 fullscreen requests from VK/OK and other embedded players to MPV.
                 boolean freshMediaCandidate;
                 synchronized (mediaCaptureLock) {
                     freshMediaCandidate = capturedMediaUrl != null &&
                         System.currentTimeMillis() - capturedMediaAt <= 15000L;
                 }
                 if (freshMediaCandidate) {
-                    startMedia3FromFullscreenButton();
+                    startMPVFromFullscreenButton();
                     callback.onCustomViewHidden();
-                    android.util.Log.i("RuFilmTV", "HTML5 fullscreen intercepted: handing off to Media3");
+                    android.util.Log.i("RuFilmTV", "HTML5 fullscreen intercepted: handing off to MPV");
                     return;
                 }
                 // Preserve native Chromium/VK controls while explicitly restoring Android TV focus.
