@@ -81,6 +81,8 @@ public class NativePlayerActivity extends Activity {
     };
 
     private String currentMediaUrl;
+    // Identifies the loopback proxy session owned by this Activity.
+    private String activeProxyUrl;
     private String currentReferer;
     private String currentUserAgent;
     private HashMap<String, String> currentHeaders = new HashMap<>();
@@ -495,6 +497,7 @@ public class NativePlayerActivity extends Activity {
         if (!useOkProxy) return sourceUrl;
         try {
             String proxyUrl = LocalStreamProxy.start(sourceUrl, headers);
+            activeProxyUrl = proxyUrl;
             android.util.Log.i("RuFilmTV-DIAG", "OK LocalStreamProxy started for " + diagnosticUrl(sourceUrl));
             return proxyUrl;
         } catch (Exception e) {
@@ -703,11 +706,34 @@ public class NativePlayerActivity extends Activity {
         syncHandler.removeCallbacks(syncRunnable);
         assistantHandler.removeCallbacks(updateTimeline);
         assistantHandler.removeCallbacks(hideAssistantRunnable);
-        if (player != null) {
-            MainActivity.syncOriginalPlayback(player.getCurrentPosition(), false);
+
+        // Detach and fully reset this playback instance before the next video starts.
+        ExoPlayer oldPlayer = player;
+        player = null;
+        if (oldPlayer != null) {
+            MainActivity.syncOriginalPlayback(oldPlayer.getCurrentPosition(), false);
             if (playerView != null) playerView.setPlayer(null);
-            player.release(); player = null;
+            try {
+                oldPlayer.pause();
+                oldPlayer.stop();
+                oldPlayer.clearMediaItems();
+                oldPlayer.release();
+            } catch (Exception e) {
+                android.util.Log.w("RuFilmTV", "Media3 cleanup failed", e);
+            }
         }
+
+        // Stop only the proxy session created by this Activity; do not affect a newer session.
+        String oldProxyUrl = activeProxyUrl;
+        activeProxyUrl = null;
+        if (oldProxyUrl != null) LocalStreamProxy.stop(oldProxyUrl);
+
+        trackSelector = null;
+        playerView = null;
+        currentMediaUrl = null;
+        currentReferer = null;
+        currentUserAgent = null;
+        currentHeaders.clear();
     }
     @Override public void onBackPressed() { releasePlayer(); super.onBackPressed(); }
 }
