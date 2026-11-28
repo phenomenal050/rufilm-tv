@@ -403,6 +403,7 @@ public final class LocalStreamProxy {
         HttpURLConnection c = (HttpURLConnection)new URL(chunkUrl).openConnection();
         c.setInstanceFollowRedirects(true); c.setConnectTimeout(20000); c.setReadTimeout(90000);
         c.setUseCaches(false); c.setRequestMethod("GET");
+        activeUpstreams.add(c);
         c.setRequestProperty("Connection", "close"); c.setRequestProperty("Accept-Encoding", "identity");
         for (Map.Entry<String,String> h : sessionHeaders.entrySet()) {
             String k=h.getKey(); if(k==null||h.getValue()==null)continue;
@@ -419,6 +420,12 @@ public final class LocalStreamProxy {
         } catch(Exception ignored) {}
         return c;
     }
+    private static void disconnectTracked(HttpURLConnection connection) {
+        if (connection == null) return;
+        activeUpstreams.remove(connection);
+        connection.disconnect();
+    }
+
     private static long[] parseOkContentRange(String value) {
         if(value==null)return null;
         Matcher m=Pattern.compile("(?i)bytes\\s+(\\d+)-(\\d+)/(\\d+)").matcher(value.trim());
@@ -442,7 +449,7 @@ public final class LocalStreamProxy {
             long askEnd=end>=0?end:start+OK_CHUNK_SIZE-1L;
             current=openOkChunk(target,start,askEnd); int code=current.getResponseCode();
             long[] win=parseOkContentRange(current.getHeaderField("Content-Range"));
-            if(code<200||code>=300||win==null||win[0]!=start){current.disconnect();return false;}
+            if(code<200||code>=300||win==null||win[0]!=start){disconnectTracked(current);return false;}
             long total=win[2]; if(start>=total){current.disconnect();writeError(output,416,"Range Not Satisfiable");return true;}
             long finalEnd=end>=0?Math.min(end,total-1L):total-1L;
             String type=current.getContentType(); int localStatus=range==null?200:206;
