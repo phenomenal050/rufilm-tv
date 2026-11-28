@@ -686,10 +686,15 @@ if "applyAudioSyncOffset(getAudioSyncOffsetMs())" not in s:
 web_ctor = re.search(r'(\bweb\s*=\s*new\s+WebView\s*\([^;]*\);)', s)
 if web_ctor and 'setAcceptThirdPartyCookies(web, true)' not in s:
     setup = '''
-        // Keep WebView focusable for Android TV DPAD, but do not steal touch focus
-        // on every player tap: WebView focus-from-touch can scroll the page unexpectedly.
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
+        web.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.requestFocus();
+                v.requestFocusFromTouch();
+            }
+            return false;
+        });
         android.webkit.CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21)
             android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
@@ -1160,10 +1165,16 @@ fullscreen_handoff = """            @Override public void onShowCustomView(View 
                     return;
                 }
                 // Preserve native Chromium/VK controls while explicitly restoring Android TV focus.
-                // Preserve keyboard/DPAD focus without forcing focus-from-touch on repeated taps.
                 view.setFocusable(true);
                 view.setFocusableInTouchMode(true);
-                view.requestFocus();"""
+                view.requestFocus();
+                view.setOnTouchListener((target, event) -> {
+                    if (event != null && event.getAction() == MotionEvent.ACTION_DOWN) {
+                        target.requestFocus();
+                        target.requestFocusFromTouch();
+                    }
+                    return false;
+                });"""
 if fullscreen_handoff not in s:
     if fullscreen_anchor not in s:
         raise SystemExit("Could not find original WebChromeClient fullscreen anchor")
