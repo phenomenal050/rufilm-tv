@@ -643,6 +643,7 @@ bridge_fields = '''
             try {
                 org.json.JSONObject result = new org.json.JSONObject();
                 result.put("url", a.capturedMediaUrl);
+                result.put("audioUrl", a.capturedOkAudioUrl);
                 result.put("referer", a.capturedMediaReferer);
                 result.put("userAgent", a.capturedMediaUserAgent);
                 result.put("headers", new org.json.JSONObject(a.capturedMediaHeaders));
