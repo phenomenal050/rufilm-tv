@@ -51,6 +51,7 @@ public class NativePlayerActivity extends Activity {
     private boolean zoomMode = false;
     private boolean startPositionApplied = false;
     private boolean released = false;
+    private boolean failureFallbackScheduled = false;
     private float volumeBeforeMute = 100f;
     private long requestedStartPositionMs = 0L;
     private long captureBaselineForSelection = 0L;
@@ -68,6 +69,7 @@ public class NativePlayerActivity extends Activity {
                 durationTimeText.setText(formatTime(duration));
             }
             currentTimeText.setText(formatTime(Math.max(0L, position)));
+            MainActivity.syncOriginalPlayback(Math.max(0L, position), true);
             playPauseButton.setText(player.isPlaying() ? "Ⅱ" : "▶");
             handler.postDelayed(this, 500L);
         }
@@ -168,6 +170,10 @@ public class NativePlayerActivity extends Activity {
                     runOnUiThread(() -> {
                         Toast.makeText(this, "VLC не смог открыть видеопоток", Toast.LENGTH_LONG).show();
                         android.util.Log.e("RuFilmTV-VLC", "LibVLC encountered playback error for " + diagnosticUrl(currentMediaUrl));
+                        if (!failureFallbackScheduled) {
+                            failureFallbackScheduled = true;
+                            handler.postDelayed(() -> { if (!isFinishing()) { releasePlayer(); finish(); } }, 2200L);
+                        }
                     });
                 }
             });
