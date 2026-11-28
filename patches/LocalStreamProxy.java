@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -39,6 +40,8 @@ public final class LocalStreamProxy {
     private static volatile String sessionToken;
     private static volatile int localPort;
     private static volatile Map<String, String> sessionHeaders = new ConcurrentHashMap<>();
+    private static final Set<Socket> activeClients = ConcurrentHashMap.newKeySet();
+    private static final Set<HttpURLConnection> activeUpstreams = ConcurrentHashMap.newKeySet();
 
     private LocalStreamProxy() {}
 
@@ -59,11 +62,46 @@ public final class LocalStreamProxy {
         return makeProxyUrl(sourceUrl);
     }
 
+    /**
+     * Stop only the proxy session represented by the supplied loopback URL.
+     * A stale Activity therefore cannot tear down a newer playback session.
+     */
+    public static synchronized void stop(String proxyUrl) {
+        if (proxyUrl == null || sessionToken == null) return;
+        String token;
+        try {
+            token = Uri.parse(proxyUrl).getLastPathSegment();
+        } catch (Exception ignored) {
+            return;
+        }
+        if (token == null || !token.equals(sessionToken)) return;
+
+        Log.i(TAG, "Stopping playback proxy session");
+        ServerSocket oldServer = server;
+        server = null;
+        if (oldServer != null) {
+            try { oldServer.close(); } catch (IOException ignored) { }
+        }
+        for (Socket client : activeClients) {
+            try { client.close(); } catch (IOException ignored) { }
+        }
+        for (HttpURLConnection connection : activeUpstreams) {
+            try { connection.disconnect(); } catch (Exception ignored) { }
+        }
+        activeClients.clear();
+        activeUpstreams.clear();
+        sessionHeaders = new ConcurrentHashMap<>();
+        sessionToken = null;
+        localPort = 0;
+        acceptThread = null;
+    }
+
     private static void acceptLoop(ServerSocket socket) {
         while (!socket.isClosed()) {
             try {
                 Socket client = socket.accept();
                 client.setSoTimeout(30000);
+                activeClients.add(client);
                 Thread worker = new Thread(() -> handle(client), "RuFilmTV-ProxyClient");
                 worker.setDaemon(true);
                 worker.start();
@@ -117,6 +155,7 @@ public final class LocalStreamProxy {
                     handleOkChunkedMedia(target, incoming, output)) return;
 
             upstream = (HttpURLConnection) new URL(target).openConnection();
+            activeUpstreams.add(upstream);
             upstream.setInstanceFollowRedirects(true);
             upstream.setConnectTimeout(20000);
             upstream.setReadTimeout(90000);
@@ -249,7 +288,11 @@ public final class LocalStreamProxy {
             Log.w(TAG, "Proxy request failed", e);
             try { writeError(client.getOutputStream(), 502, "Bad Gateway"); } catch (Exception ignored) {}
         } finally {
-            if (upstream != null) upstream.disconnect();
+            if (upstream != null) {
+                activeUpstreams.remove(upstream);
+                upstream.disconnect();
+            }
+            activeClients.remove(client);
         }
     }
 
