@@ -57,4 +57,4 @@ dependencies {
     implementation("io.github.yuroyami:libmpv-kmp-view:0.3.0")
 }
 
-// beta.69: reject OK.ru placeholder stream before Media3 handoff
+// beta.69: reject OK.ru placeholder stream before MPV handoff
